@@ -1,4 +1,4 @@
-VERSION := v0.12.7
+VERSION := v0.12.8
 
 default:
 	fd --exclude=Makefile --exclude=go.mod --exclude=Readme.md . './' | xargs -- rm -rf
@@ -9,7 +9,7 @@ default:
 	rm -rf esbuild
 	go mod tidy
 	go test ./...
-	if [ git tag -l "$(VERSION)" ]; then echo "tag $(VERSION) exists already"; exit 1; fi
+	if [ `git tag -l "$(VERSION)"` ]; then echo "tag $(VERSION) exists already"; exit 1; fi
 	git add .
 	git commit -m "Upgrade esbuild to $(VERSION)"
 	git tag $(VERSION)
