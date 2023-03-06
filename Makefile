@@ -1,4 +1,4 @@
-VERSION := v0.12.9
+VERSION := v0.17.11
 
 default:
 	fd --exclude=Makefile --exclude=go.mod --exclude=Readme.md . './' | xargs -- rm -rf

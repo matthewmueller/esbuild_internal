@@ -1,6 +1,7 @@
 package js_printer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/matthewmueller/esbuild_internal/compat"
@@ -23,7 +24,7 @@ func expectPrintedCommon(t *testing.T, name string, contents string, expected st
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
 		t.Helper()
-		log := logger.NewDeferLog(logger.DeferLogNoVerboseOrDebug)
+		log := logger.NewDeferLog(logger.DeferLogNoVerboseOrDebug, nil)
 		tree, ok := js_parser.Parse(log, test.SourceForTest(contents), js_parser.OptionsFromConfig(&options))
 		msgs := log.Done()
 		text := ""
@@ -39,8 +40,8 @@ func expectPrintedCommon(t *testing.T, name string, contents string, expected st
 		r := renamer.NewNoOpRenamer(symbols)
 		js := Print(tree, symbols, r, Options{
 			ASCIIOnly:           options.ASCIIOnly,
-			MangleSyntax:        options.MangleSyntax,
-			RemoveWhitespace:    options.RemoveWhitespace,
+			MinifySyntax:        options.MinifySyntax,
+			MinifyWhitespace:    options.MinifyWhitespace,
 			UnsupportedFeatures: options.UnsupportedJSFeatures,
 		}).JS
 		test.AssertEqualWithDiff(t, string(js), expected)
@@ -55,22 +56,22 @@ func expectPrinted(t *testing.T, contents string, expected string) {
 func expectPrintedMinify(t *testing.T, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents+" [minified]", contents, expected, config.Options{
-		RemoveWhitespace: true,
+		MinifyWhitespace: true,
 	})
 }
 
 func expectPrintedMangle(t *testing.T, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents+" [mangled]", contents, expected, config.Options{
-		MangleSyntax: true,
+		MinifySyntax: true,
 	})
 }
 
 func expectPrintedMangleMinify(t *testing.T, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents+" [mangled, minified]", contents, expected, config.Options{
-		MangleSyntax:     true,
-		RemoveWhitespace: true,
+		MinifySyntax:     true,
+		MinifyWhitespace: true,
 	})
 }
 
@@ -84,7 +85,7 @@ func expectPrintedASCII(t *testing.T, contents string, expected string) {
 func expectPrintedMinifyASCII(t *testing.T, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents+" [ascii]", contents, expected, config.Options{
-		RemoveWhitespace: true,
+		MinifyWhitespace: true,
 		ASCIIOnly:        true,
 	})
 }
@@ -104,7 +105,7 @@ func expectPrintedTargetMinify(t *testing.T, esVersion int, contents string, exp
 		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine][]int{
 			compat.ES: {esVersion},
 		}),
-		RemoveWhitespace: true,
+		MinifyWhitespace: true,
 	})
 }
 
@@ -114,7 +115,7 @@ func expectPrintedTargetMangle(t *testing.T, esVersion int, contents string, exp
 		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine][]int{
 			compat.ES: {esVersion},
 		}),
-		MangleSyntax: true,
+		MinifySyntax: true,
 	})
 }
 
@@ -156,112 +157,128 @@ func expectPrintedJSXMinify(t *testing.T, contents string, expected string) {
 			Parse:    true,
 			Preserve: true,
 		},
-		RemoveWhitespace: true,
+		MinifyWhitespace: true,
 	})
 }
 
 func TestNumber(t *testing.T) {
 	// Check "1eN"
-	expectPrinted(t, "1e-100", "1e-100;\n")
-	expectPrinted(t, "1e-4", "1e-4;\n")
-	expectPrinted(t, "1e-3", "1e-3;\n")
-	expectPrinted(t, "1e-2", "0.01;\n")
-	expectPrinted(t, "1e-1", "0.1;\n")
-	expectPrinted(t, "1e0", "1;\n")
-	expectPrinted(t, "1e1", "10;\n")
-	expectPrinted(t, "1e2", "100;\n")
-	expectPrinted(t, "1e3", "1e3;\n")
-	expectPrinted(t, "1e4", "1e4;\n")
-	expectPrinted(t, "1e100", "1e100;\n")
-	expectPrintedMinify(t, "1e-100", "1e-100;")
-	expectPrintedMinify(t, "1e-5", "1e-5;")
-	expectPrintedMinify(t, "1e-4", "1e-4;")
-	expectPrintedMinify(t, "1e-3", ".001;")
-	expectPrintedMinify(t, "1e-2", ".01;")
-	expectPrintedMinify(t, "1e-1", ".1;")
-	expectPrintedMinify(t, "1e0", "1;")
-	expectPrintedMinify(t, "1e1", "10;")
-	expectPrintedMinify(t, "1e2", "100;")
-	expectPrintedMinify(t, "1e3", "1e3;")
-	expectPrintedMinify(t, "1e4", "1e4;")
-	expectPrintedMinify(t, "1e100", "1e100;")
+	expectPrinted(t, "x = 1e-100", "x = 1e-100;\n")
+	expectPrinted(t, "x = 1e-4", "x = 1e-4;\n")
+	expectPrinted(t, "x = 1e-3", "x = 1e-3;\n")
+	expectPrinted(t, "x = 1e-2", "x = 0.01;\n")
+	expectPrinted(t, "x = 1e-1", "x = 0.1;\n")
+	expectPrinted(t, "x = 1e0", "x = 1;\n")
+	expectPrinted(t, "x = 1e1", "x = 10;\n")
+	expectPrinted(t, "x = 1e2", "x = 100;\n")
+	expectPrinted(t, "x = 1e3", "x = 1e3;\n")
+	expectPrinted(t, "x = 1e4", "x = 1e4;\n")
+	expectPrinted(t, "x = 1e100", "x = 1e100;\n")
+	expectPrintedMinify(t, "x = 1e-100", "x=1e-100;")
+	expectPrintedMinify(t, "x = 1e-5", "x=1e-5;")
+	expectPrintedMinify(t, "x = 1e-4", "x=1e-4;")
+	expectPrintedMinify(t, "x = 1e-3", "x=.001;")
+	expectPrintedMinify(t, "x = 1e-2", "x=.01;")
+	expectPrintedMinify(t, "x = 1e-1", "x=.1;")
+	expectPrintedMinify(t, "x = 1e0", "x=1;")
+	expectPrintedMinify(t, "x = 1e1", "x=10;")
+	expectPrintedMinify(t, "x = 1e2", "x=100;")
+	expectPrintedMinify(t, "x = 1e3", "x=1e3;")
+	expectPrintedMinify(t, "x = 1e4", "x=1e4;")
+	expectPrintedMinify(t, "x = 1e100", "x=1e100;")
 
 	// Check "12eN"
-	expectPrinted(t, "12e-100", "12e-100;\n")
-	expectPrinted(t, "12e-5", "12e-5;\n")
-	expectPrinted(t, "12e-4", "12e-4;\n")
-	expectPrinted(t, "12e-3", "0.012;\n")
-	expectPrinted(t, "12e-2", "0.12;\n")
-	expectPrinted(t, "12e-1", "1.2;\n")
-	expectPrinted(t, "12e0", "12;\n")
-	expectPrinted(t, "12e1", "120;\n")
-	expectPrinted(t, "12e2", "1200;\n")
-	expectPrinted(t, "12e3", "12e3;\n")
-	expectPrinted(t, "12e4", "12e4;\n")
-	expectPrinted(t, "12e100", "12e100;\n")
-	expectPrintedMinify(t, "12e-100", "12e-100;")
-	expectPrintedMinify(t, "12e-6", "12e-6;")
-	expectPrintedMinify(t, "12e-5", "12e-5;")
-	expectPrintedMinify(t, "12e-4", ".0012;")
-	expectPrintedMinify(t, "12e-3", ".012;")
-	expectPrintedMinify(t, "12e-2", ".12;")
-	expectPrintedMinify(t, "12e-1", "1.2;")
-	expectPrintedMinify(t, "12e0", "12;")
-	expectPrintedMinify(t, "12e1", "120;")
-	expectPrintedMinify(t, "12e2", "1200;")
-	expectPrintedMinify(t, "12e3", "12e3;")
-	expectPrintedMinify(t, "12e4", "12e4;")
-	expectPrintedMinify(t, "12e100", "12e100;")
+	expectPrinted(t, "x = 12e-100", "x = 12e-100;\n")
+	expectPrinted(t, "x = 12e-5", "x = 12e-5;\n")
+	expectPrinted(t, "x = 12e-4", "x = 12e-4;\n")
+	expectPrinted(t, "x = 12e-3", "x = 0.012;\n")
+	expectPrinted(t, "x = 12e-2", "x = 0.12;\n")
+	expectPrinted(t, "x = 12e-1", "x = 1.2;\n")
+	expectPrinted(t, "x = 12e0", "x = 12;\n")
+	expectPrinted(t, "x = 12e1", "x = 120;\n")
+	expectPrinted(t, "x = 12e2", "x = 1200;\n")
+	expectPrinted(t, "x = 12e3", "x = 12e3;\n")
+	expectPrinted(t, "x = 12e4", "x = 12e4;\n")
+	expectPrinted(t, "x = 12e100", "x = 12e100;\n")
+	expectPrintedMinify(t, "x = 12e-100", "x=12e-100;")
+	expectPrintedMinify(t, "x = 12e-6", "x=12e-6;")
+	expectPrintedMinify(t, "x = 12e-5", "x=12e-5;")
+	expectPrintedMinify(t, "x = 12e-4", "x=.0012;")
+	expectPrintedMinify(t, "x = 12e-3", "x=.012;")
+	expectPrintedMinify(t, "x = 12e-2", "x=.12;")
+	expectPrintedMinify(t, "x = 12e-1", "x=1.2;")
+	expectPrintedMinify(t, "x = 12e0", "x=12;")
+	expectPrintedMinify(t, "x = 12e1", "x=120;")
+	expectPrintedMinify(t, "x = 12e2", "x=1200;")
+	expectPrintedMinify(t, "x = 12e3", "x=12e3;")
+	expectPrintedMinify(t, "x = 12e4", "x=12e4;")
+	expectPrintedMinify(t, "x = 12e100", "x=12e100;")
 
 	// Check cases for "A.BeX" => "ABeY" simplification
-	expectPrinted(t, "123456789", "123456789;\n")
-	expectPrinted(t, "1123456789", "1123456789;\n")
-	expectPrinted(t, "10123456789", "10123456789;\n")
-	expectPrinted(t, "100123456789", "100123456789;\n")
-	expectPrinted(t, "1000123456789", "1000123456789;\n")
-	expectPrinted(t, "10000123456789", "10000123456789;\n")
-	expectPrinted(t, "100000123456789", "100000123456789;\n")
-	expectPrinted(t, "1000000123456789", "1000000123456789;\n")
-	expectPrinted(t, "10000000123456789", "10000000123456788;\n")
-	expectPrinted(t, "100000000123456789", "100000000123456780;\n")
-	expectPrinted(t, "1000000000123456789", "1000000000123456800;\n")
-	expectPrinted(t, "10000000000123456789", "10000000000123458e3;\n")
-	expectPrinted(t, "100000000000123456789", "10000000000012345e4;\n")
+	expectPrinted(t, "x = 123456789", "x = 123456789;\n")
+	expectPrinted(t, "x = 1123456789", "x = 1123456789;\n")
+	expectPrinted(t, "x = 10123456789", "x = 10123456789;\n")
+	expectPrinted(t, "x = 100123456789", "x = 100123456789;\n")
+	expectPrinted(t, "x = 1000123456789", "x = 1000123456789;\n")
+	expectPrinted(t, "x = 10000123456789", "x = 10000123456789;\n")
+	expectPrinted(t, "x = 100000123456789", "x = 100000123456789;\n")
+	expectPrinted(t, "x = 1000000123456789", "x = 1000000123456789;\n")
+	expectPrinted(t, "x = 10000000123456789", "x = 10000000123456788;\n")
+	expectPrinted(t, "x = 100000000123456789", "x = 100000000123456780;\n")
+	expectPrinted(t, "x = 1000000000123456789", "x = 1000000000123456800;\n")
+	expectPrinted(t, "x = 10000000000123456789", "x = 10000000000123458e3;\n")
+	expectPrinted(t, "x = 100000000000123456789", "x = 10000000000012345e4;\n")
 
 	// Check numbers around the ends of various integer ranges. These were
 	// crashing in the WebAssembly build due to a bug in the Go runtime.
 
 	// int32
-	expectPrinted(t, "0x7fff_ffff", "2147483647;\n")
-	expectPrinted(t, "0x8000_0000", "2147483648;\n")
-	expectPrinted(t, "0x8000_0001", "2147483649;\n")
-	expectPrinted(t, "-0x7fff_ffff", "-2147483647;\n")
-	expectPrinted(t, "-0x8000_0000", "-2147483648;\n")
-	expectPrinted(t, "-0x8000_0001", "-2147483649;\n")
+	expectPrinted(t, "x = 0x7fff_ffff", "x = 2147483647;\n")
+	expectPrinted(t, "x = 0x8000_0000", "x = 2147483648;\n")
+	expectPrinted(t, "x = 0x8000_0001", "x = 2147483649;\n")
+	expectPrinted(t, "x = -0x7fff_ffff", "x = -2147483647;\n")
+	expectPrinted(t, "x = -0x8000_0000", "x = -2147483648;\n")
+	expectPrinted(t, "x = -0x8000_0001", "x = -2147483649;\n")
 
 	// uint32
-	expectPrinted(t, "0xffff_ffff", "4294967295;\n")
-	expectPrinted(t, "0x1_0000_0000", "4294967296;\n")
-	expectPrinted(t, "0x1_0000_0001", "4294967297;\n")
-	expectPrinted(t, "-0xffff_ffff", "-4294967295;\n")
-	expectPrinted(t, "-0x1_0000_0000", "-4294967296;\n")
-	expectPrinted(t, "-0x1_0000_0001", "-4294967297;\n")
+	expectPrinted(t, "x = 0xffff_ffff", "x = 4294967295;\n")
+	expectPrinted(t, "x = 0x1_0000_0000", "x = 4294967296;\n")
+	expectPrinted(t, "x = 0x1_0000_0001", "x = 4294967297;\n")
+	expectPrinted(t, "x = -0xffff_ffff", "x = -4294967295;\n")
+	expectPrinted(t, "x = -0x1_0000_0000", "x = -4294967296;\n")
+	expectPrinted(t, "x = -0x1_0000_0001", "x = -4294967297;\n")
 
 	// int64
-	expectPrinted(t, "0x7fff_ffff_ffff_fdff", "9223372036854775e3;\n")
-	expectPrinted(t, "0x8000_0000_0000_0000", "9223372036854776e3;\n")
-	expectPrinted(t, "0x8000_0000_0000_3000", "9223372036854788e3;\n")
-	expectPrinted(t, "-0x7fff_ffff_ffff_fdff", "-9223372036854775e3;\n")
-	expectPrinted(t, "-0x8000_0000_0000_0000", "-9223372036854776e3;\n")
-	expectPrinted(t, "-0x8000_0000_0000_3000", "-9223372036854788e3;\n")
+	expectPrinted(t, "x = 0x7fff_ffff_ffff_fdff", "x = 9223372036854775e3;\n")
+	expectPrinted(t, "x = 0x8000_0000_0000_0000", "x = 9223372036854776e3;\n")
+	expectPrinted(t, "x = 0x8000_0000_0000_3000", "x = 9223372036854788e3;\n")
+	expectPrinted(t, "x = -0x7fff_ffff_ffff_fdff", "x = -9223372036854775e3;\n")
+	expectPrinted(t, "x = -0x8000_0000_0000_0000", "x = -9223372036854776e3;\n")
+	expectPrinted(t, "x = -0x8000_0000_0000_3000", "x = -9223372036854788e3;\n")
 
 	// uint64
-	expectPrinted(t, "0xffff_ffff_ffff_fbff", "1844674407370955e4;\n")
-	expectPrinted(t, "0x1_0000_0000_0000_0000", "18446744073709552e3;\n")
-	expectPrinted(t, "0x1_0000_0000_0000_1000", "18446744073709556e3;\n")
-	expectPrinted(t, "-0xffff_ffff_ffff_fbff", "-1844674407370955e4;\n")
-	expectPrinted(t, "-0x1_0000_0000_0000_0000", "-18446744073709552e3;\n")
-	expectPrinted(t, "-0x1_0000_0000_0000_1000", "-18446744073709556e3;\n")
+	expectPrinted(t, "x = 0xffff_ffff_ffff_fbff", "x = 1844674407370955e4;\n")
+	expectPrinted(t, "x = 0x1_0000_0000_0000_0000", "x = 18446744073709552e3;\n")
+	expectPrinted(t, "x = 0x1_0000_0000_0000_1000", "x = 18446744073709556e3;\n")
+	expectPrinted(t, "x = -0xffff_ffff_ffff_fbff", "x = -1844674407370955e4;\n")
+	expectPrinted(t, "x = -0x1_0000_0000_0000_0000", "x = -18446744073709552e3;\n")
+	expectPrinted(t, "x = -0x1_0000_0000_0000_1000", "x = -18446744073709556e3;\n")
+
+	// Check the hex vs. decimal decision boundary when minifying
+	expectPrinted(t, "x = 999999999999", "x = 999999999999;\n")
+	expectPrinted(t, "x = 1000000000001", "x = 1000000000001;\n")
+	expectPrinted(t, "x = 0x0FFF_FFFF_FFFF_FF80", "x = 1152921504606846800;\n")
+	expectPrinted(t, "x = 0x1000_0000_0000_0000", "x = 1152921504606847e3;\n")
+	expectPrinted(t, "x = 0xFFFF_FFFF_FFFF_F000", "x = 18446744073709548e3;\n")
+	expectPrinted(t, "x = 0xFFFF_FFFF_FFFF_F800", "x = 1844674407370955e4;\n")
+	expectPrinted(t, "x = 0xFFFF_FFFF_FFFF_FFFF", "x = 18446744073709552e3;\n")
+	expectPrintedMinify(t, "x = 999999999999", "x=999999999999;")
+	expectPrintedMinify(t, "x = 1000000000001", "x=0xe8d4a51001;")
+	expectPrintedMinify(t, "x = 0x0FFF_FFFF_FFFF_FF80", "x=0xfffffffffffff80;")
+	expectPrintedMinify(t, "x = 0x1000_0000_0000_0000", "x=1152921504606847e3;")
+	expectPrintedMinify(t, "x = 0xFFFF_FFFF_FFFF_F000", "x=0xfffffffffffff000;")
+	expectPrintedMinify(t, "x = 0xFFFF_FFFF_FFFF_F800", "x=1844674407370955e4;")
+	expectPrintedMinify(t, "x = 0xFFFF_FFFF_FFFF_FFFF", "x=18446744073709552e3;")
 }
 
 func TestArray(t *testing.T) {
@@ -303,6 +320,16 @@ func TestNew(t *testing.T) {
 	expectPrintedMinify(t, "new x().y", "new x().y;")
 	expectPrintedMinify(t, "new x() + y", "new x+y;")
 	expectPrintedMinify(t, "new x() ** 2", "new x**2;")
+
+	// Test preservation of Webpack-specific comments
+	expectPrinted(t, "new Worker(// webpackFoo: 1\n // webpackBar: 2\n 'path');", "new Worker(\n  // webpackFoo: 1\n  // webpackBar: 2\n  \"path\"\n);\n")
+	expectPrinted(t, "new Worker(/* webpackFoo: 1 */ /* webpackBar: 2 */ 'path');", "new Worker(\n  /* webpackFoo: 1 */\n  /* webpackBar: 2 */\n  \"path\"\n);\n")
+	expectPrinted(t, "new Worker(\n    /* multi\n     * line\n     * webpackBar: */ 'path');", "new Worker(\n  /* multi\n   * line\n   * webpackBar: */\n  \"path\"\n);\n")
+	expectPrinted(t, "new Worker(/* webpackFoo: 1 */ 'path' /* webpackBar:2 */);", "new Worker(\n  /* webpackFoo: 1 */\n  \"path\"\n  /* webpackBar:2 */\n);\n")
+	expectPrinted(t, "new Worker(/* webpackFoo: 1 */ 'path' /* webpackBar:2 */ ,);", "new Worker(\n  /* webpackFoo: 1 */\n  \"path\"\n);\n") // Not currently handled
+	expectPrinted(t, "new Worker(/* webpackFoo: 1 */ 'path', /* webpackBar:2 */ );", "new Worker(\n  /* webpackFoo: 1 */\n  \"path\"\n  /* webpackBar:2 */\n);\n")
+	expectPrinted(t, "new Worker(new URL('path', /* webpackFoo: these can go anywhere */ import.meta.url))",
+		"new Worker(new URL(\n  \"path\",\n  /* webpackFoo: these can go anywhere */\n  import.meta.url\n));\n")
 }
 
 func TestCall(t *testing.T) {
@@ -321,7 +348,7 @@ func TestCall(t *testing.T) {
 	expectPrinted(t, "(1, eval)(x)", "(1, eval)(x);\n")
 	expectPrinted(t, "(1, eval)?.(x)", "(1, eval)?.(x);\n")
 	expectPrintedMangle(t, "(1 ? eval : 2)(x)", "(0, eval)(x);\n")
-	expectPrintedMangle(t, "(1 ? eval : 2)?.(x)", "(0, eval)?.(x);\n")
+	expectPrintedMangle(t, "(1 ? eval : 2)?.(x)", "eval?.(x);\n")
 
 	expectPrintedMinify(t, "eval?.(x)", "eval?.(x);")
 	expectPrintedMinify(t, "eval(x,y)", "eval(x,y);")
@@ -329,7 +356,7 @@ func TestCall(t *testing.T) {
 	expectPrintedMinify(t, "(1, eval)(x)", "(1,eval)(x);")
 	expectPrintedMinify(t, "(1, eval)?.(x)", "(1,eval)?.(x);")
 	expectPrintedMangleMinify(t, "(1 ? eval : 2)(x)", "(0,eval)(x);")
-	expectPrintedMangleMinify(t, "(1 ? eval : 2)?.(x)", "(0,eval)?.(x);")
+	expectPrintedMangleMinify(t, "(1 ? eval : 2)?.(x)", "eval?.(x);")
 }
 
 func TestMember(t *testing.T) {
@@ -391,6 +418,8 @@ func TestString(t *testing.T) {
 	expectPrinted(t, "let x = '\\01'", "let x = \"\x01\";\n")
 	expectPrinted(t, "let x = '\x10'", "let x = \"\x10\";\n")
 	expectPrinted(t, "let x = '\\x10'", "let x = \"\x10\";\n")
+	expectPrinted(t, "let x = '\x1B'", "let x = \"\\x1B\";\n")
+	expectPrinted(t, "let x = '\\x1B'", "let x = \"\\x1B\";\n")
 	expectPrinted(t, "let x = '\uABCD'", "let x = \"\uABCD\";\n")
 	expectPrinted(t, "let x = '\\uABCD'", "let x = \"\uABCD\";\n")
 	expectPrinted(t, "let x = '\U000123AB'", "let x = \"\U000123AB\";\n")
@@ -515,6 +544,19 @@ func TestFunction(t *testing.T) {
 		"function foo([, ,] = [, ,]) {\n}\n")
 }
 
+func TestCommentsAndParentheses(t *testing.T) {
+	expectPrinted(t, "(/* foo */ { x() { foo() } }.x());", "/* foo */\n({ x() {\n  foo();\n} }).x();\n")
+	expectPrinted(t, "(/* foo */ function f() { foo(f) }());", "/* foo */\n(function f() {\n  foo(f);\n})();\n")
+	expectPrinted(t, "(/* foo */ class x { static y() { foo(x) } }.y());", "/* foo */\n(class x {\n  static y() {\n    foo(x);\n  }\n}).y();\n")
+	expectPrinted(t, "(/* @__PURE__ */ (() => foo())());", "/* @__PURE__ */ (() => foo())();\n")
+	expectPrinted(t, "export default (/* foo */ function f() {});", "export default (\n  /* foo */\n  function f() {\n  }\n);\n")
+	expectPrinted(t, "export default (/* foo */ class x {});", "export default (\n  /* foo */\n  class x {\n  }\n);\n")
+	expectPrinted(t, "x = () => (/* foo */ {});", "x = () => (\n  /* foo */\n  {}\n);\n")
+	expectPrinted(t, "for ((/* foo */ let).x of y) ;", "for (\n  /* foo */\n  (let).x of y\n)\n  ;\n")
+	expectPrinted(t, "for (/* foo */ (let).x of y) ;", "for (\n  /* foo */\n  (let).x of y\n)\n  ;\n")
+	expectPrinted(t, "function *x() { yield (/* foo */ y) }", "function* x() {\n  yield (\n    /* foo */\n    y\n  );\n}\n")
+}
+
 func TestPureComment(t *testing.T) {
 	expectPrinted(t,
 		"(function() {})",
@@ -535,6 +577,16 @@ func TestPureComment(t *testing.T) {
 	expectPrinted(t,
 		"/*@__PURE__*/new (function() {})()",
 		"/* @__PURE__ */ new function() {\n}();\n")
+
+	expectPrinted(t,
+		"export default (function() {})",
+		"export default (function() {\n});\n")
+	expectPrinted(t,
+		"export default (function() {})()",
+		"export default (function() {\n})();\n")
+	expectPrinted(t,
+		"export default /*@__PURE__*/(function() {})()",
+		"export default /* @__PURE__ */ (function() {\n})();\n")
 }
 
 func TestGenerator(t *testing.T) {
@@ -639,11 +691,18 @@ func TestPrivateIdentifiers(t *testing.T) {
 func TestImport(t *testing.T) {
 	expectPrinted(t, "import('path');", "import(\"path\");\n") // The semicolon must not be a separate statement
 
-	// Test preservation of leading interior comments
-	expectPrinted(t, "import(// comment 1\n // comment 2\n 'path');", "import(\n  // comment 1\n  // comment 2\n  \"path\"\n);\n")
-	expectPrinted(t, "import(/* comment 1 */ /* comment 2 */ 'path');", "import(\n  /* comment 1 */\n  /* comment 2 */\n  \"path\"\n);\n")
-	expectPrinted(t, "import(\n    /* multi\n     * line\n     * comment */ 'path');", "import(\n  /* multi\n   * line\n   * comment */\n  \"path\"\n);\n")
-	expectPrinted(t, "import(/* comment 1 */ 'path' /* comment 2 */);", "import(\n  /* comment 1 */\n  \"path\"\n);\n")
+	// Test preservation of Webpack-specific comments
+	expectPrinted(t, "import(// webpackFoo: 1\n // webpackBar: 2\n 'path');", "import(\n  // webpackFoo: 1\n  // webpackBar: 2\n  \"path\"\n);\n")
+	expectPrinted(t, "import(// webpackFoo: 1\n // webpackBar: 2\n 'path', {type: 'module'});", "import(\n  // webpackFoo: 1\n  // webpackBar: 2\n  \"path\",\n  { type: \"module\" }\n);\n")
+	expectPrinted(t, "import(/* webpackFoo: 1 */ /* webpackBar: 2 */ 'path');", "import(\n  /* webpackFoo: 1 */\n  /* webpackBar: 2 */\n  \"path\"\n);\n")
+	expectPrinted(t, "import(/* webpackFoo: 1 */ /* webpackBar: 2 */ 'path', {type: 'module'});", "import(\n  /* webpackFoo: 1 */\n  /* webpackBar: 2 */\n  \"path\",\n  { type: \"module\" }\n);\n")
+	expectPrinted(t, "import(\n    /* multi\n     * line\n     * webpackBar: */ 'path');", "import(\n  /* multi\n   * line\n   * webpackBar: */\n  \"path\"\n);\n")
+	expectPrinted(t, "import(/* webpackFoo: 1 */ 'path' /* webpackBar:2 */);", "import(\n  /* webpackFoo: 1 */\n  \"path\"\n  /* webpackBar:2 */\n);\n")
+	expectPrinted(t, "import(/* webpackFoo: 1 */ 'path' /* webpackBar:2 */ ,);", "import(\n  /* webpackFoo: 1 */\n  \"path\"\n);\n") // Not currently handled
+	expectPrinted(t, "import(/* webpackFoo: 1 */ 'path', /* webpackBar:2 */ );", "import(\n  /* webpackFoo: 1 */\n  \"path\"\n  /* webpackBar:2 */\n);\n")
+	expectPrinted(t, "import(/* webpackFoo: 1 */ 'path', { type: 'module' } /* webpackBar:2 */ );", "import(\n  /* webpackFoo: 1 */\n  \"path\",\n  { type: \"module\" }\n  /* webpackBar:2 */\n);\n")
+	expectPrinted(t, "import(new URL('path', /* webpackFoo: these can go anywhere */ import.meta.url))",
+		"import(new URL(\n  \"path\",\n  /* webpackFoo: these can go anywhere */\n  import.meta.url\n));\n")
 }
 
 func TestExportDefault(t *testing.T) {
@@ -722,6 +781,8 @@ func TestWhitespace(t *testing.T) {
 
 	expectPrintedMinify(t, "x in function(){}", "x in function(){};")
 	expectPrintedMinify(t, "x instanceof function(){}", "x instanceof function(){};")
+	expectPrintedMinify(t, "π in function(){}", "π in function(){};")
+	expectPrintedMinify(t, "π instanceof function(){}", "π instanceof function(){};")
 
 	expectPrintedMinify(t, "()=>({})", "()=>({});")
 	expectPrintedMinify(t, "()=>({}[1])", "()=>({})[1];")
@@ -906,21 +967,50 @@ func TestJSX(t *testing.T) {
 	expectPrintedJSXMinify(t, "<a>{' x '}{'<b/>'}{' y '}</a>", "<a> x {\"<b/>\"} y </a>;")
 }
 
+func TestJSXSingleLine(t *testing.T) {
+	expectPrintedJSX(t, "<x/>", "<x />;\n")
+	expectPrintedJSX(t, "<x y/>", "<x y />;\n")
+	expectPrintedJSX(t, "<x\n/>", "<x />;\n")
+	expectPrintedJSX(t, "<x\ny/>", "<x\n  y\n/>;\n")
+	expectPrintedJSX(t, "<x y\n/>", "<x\n  y\n/>;\n")
+	expectPrintedJSX(t, "<x\n{...y}/>", "<x\n  {...y}\n/>;\n")
+
+	expectPrintedJSXMinify(t, "<x/>", "<x/>;")
+	expectPrintedJSXMinify(t, "<x y/>", "<x y/>;")
+	expectPrintedJSXMinify(t, "<x\n/>", "<x/>;")
+	expectPrintedJSXMinify(t, "<x\ny/>", "<x y/>;")
+	expectPrintedJSXMinify(t, "<x y\n/>", "<x y/>;")
+	expectPrintedJSXMinify(t, "<x\n{...y}/>", "<x{...y}/>;")
+}
+
 func TestAvoidSlashScript(t *testing.T) {
 	// Positive cases
 	expectPrinted(t, "x = '</script'", "x = \"<\\/script\";\n")
 	expectPrinted(t, "x = `</script`", "x = `<\\/script`;\n")
+	expectPrinted(t, "x = `</SCRIPT`", "x = `<\\/SCRIPT`;\n")
+	expectPrinted(t, "x = `</ScRiPt`", "x = `<\\/ScRiPt`;\n")
 	expectPrinted(t, "x = `</script${y}`", "x = `<\\/script${y}`;\n")
 	expectPrinted(t, "x = `${y}</script`", "x = `${y}<\\/script`;\n")
 	expectPrintedMinify(t, "x = 1 < /script/.exec(y).length", "x=1< /script/.exec(y).length;")
+	expectPrintedMinify(t, "x = 1 < /SCRIPT/.exec(y).length", "x=1< /SCRIPT/.exec(y).length;")
+	expectPrintedMinify(t, "x = 1 < /ScRiPt/.exec(y).length", "x=1< /ScRiPt/.exec(y).length;")
 	expectPrintedMinify(t, "x = 1 << /script/.exec(y).length", "x=1<< /script/.exec(y).length;")
-	expectPrinted(t, "//! </script", "//! <\\/script\n")
+	expectPrinted(t, "//! </script\n//! >/script\n//! /script", "//! <\\/script\n//! >/script\n//! /script\n")
+	expectPrinted(t, "//! </SCRIPT\n//! >/SCRIPT\n//! /SCRIPT", "//! <\\/SCRIPT\n//! >/SCRIPT\n//! /SCRIPT\n")
+	expectPrinted(t, "//! </ScRiPt\n//! >/ScRiPt\n//! /ScRiPt", "//! <\\/ScRiPt\n//! >/ScRiPt\n//! /ScRiPt\n")
+	expectPrinted(t, "/*! </script \n </script */", "/*! <\\/script \n <\\/script */\n")
+	expectPrinted(t, "/*! </SCRIPT \n </SCRIPT */", "/*! <\\/SCRIPT \n <\\/SCRIPT */\n")
+	expectPrinted(t, "/*! </ScRiPt \n </ScRiPt */", "/*! <\\/ScRiPt \n <\\/ScRiPt */\n")
 	expectPrinted(t, "String.raw`</script`",
-		"var _a;\nString.raw(_a || (_a = __template([\"<\\/script\"])));\nimport {\n  __template\n} from \"<runtime>\";\n")
+		"import { __template } from \"<runtime>\";\nvar _a;\nString.raw(_a || (_a = __template([\"<\\/script\"])));\n")
 	expectPrinted(t, "String.raw`</script${a}`",
-		"var _a;\nString.raw(_a || (_a = __template([\"<\\/script\", \"\"])), a);\nimport {\n  __template\n} from \"<runtime>\";\n")
+		"import { __template } from \"<runtime>\";\nvar _a;\nString.raw(_a || (_a = __template([\"<\\/script\", \"\"])), a);\n")
 	expectPrinted(t, "String.raw`${a}</script`",
-		"var _a;\nString.raw(_a || (_a = __template([\"\", \"<\\/script\"])), a);\nimport {\n  __template\n} from \"<runtime>\";\n")
+		"import { __template } from \"<runtime>\";\nvar _a;\nString.raw(_a || (_a = __template([\"\", \"<\\/script\"])), a);\n")
+	expectPrinted(t, "String.raw`</SCRIPT`",
+		"import { __template } from \"<runtime>\";\nvar _a;\nString.raw(_a || (_a = __template([\"<\\/SCRIPT\"])));\n")
+	expectPrinted(t, "String.raw`</ScRiPt`",
+		"import { __template } from \"<runtime>\";\nvar _a;\nString.raw(_a || (_a = __template([\"<\\/ScRiPt\"])));\n")
 
 	// Negative cases
 	expectPrinted(t, "x = '</'", "x = \"</\";\n")
@@ -930,4 +1020,67 @@ func TestAvoidSlashScript(t *testing.T) {
 	expectPrinted(t, "x = '<script>'", "x = \"<script>\";\n")
 	expectPrintedMinify(t, "x = 1 < / script/.exec(y).length", "x=1</ script/.exec(y).length;")
 	expectPrintedMinify(t, "x = 1 << / script/.exec(y).length", "x=1<</ script/.exec(y).length;")
+}
+
+func TestInfinity(t *testing.T) {
+	expectPrinted(t, "x = Infinity", "x = Infinity;\n")
+	expectPrinted(t, "x = -Infinity", "x = -Infinity;\n")
+	expectPrinted(t, "x = (Infinity).toString", "x = Infinity.toString;\n")
+	expectPrinted(t, "x = (-Infinity).toString", "x = (-Infinity).toString;\n")
+	expectPrinted(t, "x = (Infinity) ** 2", "x = Infinity ** 2;\n")
+	expectPrinted(t, "x = (-Infinity) ** 2", "x = (-Infinity) ** 2;\n")
+	expectPrinted(t, "x = ~Infinity", "x = ~Infinity;\n")
+	expectPrinted(t, "x = ~-Infinity", "x = ~-Infinity;\n")
+	expectPrinted(t, "x = Infinity * y", "x = Infinity * y;\n")
+	expectPrinted(t, "x = Infinity / y", "x = Infinity / y;\n")
+	expectPrinted(t, "x = y * Infinity", "x = y * Infinity;\n")
+	expectPrinted(t, "x = y / Infinity", "x = y / Infinity;\n")
+	expectPrinted(t, "throw Infinity", "throw Infinity;\n")
+
+	expectPrintedMinify(t, "x = Infinity", "x=Infinity;")
+	expectPrintedMinify(t, "x = -Infinity", "x=-Infinity;")
+	expectPrintedMinify(t, "x = (Infinity).toString", "x=Infinity.toString;")
+	expectPrintedMinify(t, "x = (-Infinity).toString", "x=(-Infinity).toString;")
+	expectPrintedMinify(t, "x = (Infinity) ** 2", "x=Infinity**2;")
+	expectPrintedMinify(t, "x = (-Infinity) ** 2", "x=(-Infinity)**2;")
+	expectPrintedMinify(t, "x = ~Infinity", "x=~Infinity;")
+	expectPrintedMinify(t, "x = ~-Infinity", "x=~-Infinity;")
+	expectPrintedMinify(t, "x = Infinity * y", "x=Infinity*y;")
+	expectPrintedMinify(t, "x = Infinity / y", "x=Infinity/y;")
+	expectPrintedMinify(t, "x = y * Infinity", "x=y*Infinity;")
+	expectPrintedMinify(t, "x = y / Infinity", "x=y/Infinity;")
+	expectPrintedMinify(t, "throw Infinity", "throw Infinity;")
+
+	expectPrintedMangle(t, "x = Infinity", "x = 1 / 0;\n")
+	expectPrintedMangle(t, "x = -Infinity", "x = -1 / 0;\n")
+	expectPrintedMangle(t, "x = (Infinity).toString", "x = (1 / 0).toString;\n")
+	expectPrintedMangle(t, "x = (-Infinity).toString", "x = (-1 / 0).toString;\n")
+	expectPrintedMangle(t, "x = Infinity ** 2", "x = (1 / 0) ** 2;\n")
+	expectPrintedMangle(t, "x = (-Infinity) ** 2", "x = (-1 / 0) ** 2;\n")
+	expectPrintedMangle(t, "x = Infinity * y", "x = 1 / 0 * y;\n")
+	expectPrintedMangle(t, "x = Infinity / y", "x = 1 / 0 / y;\n")
+	expectPrintedMangle(t, "x = y * Infinity", "x = y * (1 / 0);\n")
+	expectPrintedMangle(t, "x = y / Infinity", "x = y / (1 / 0);\n")
+	expectPrintedMangle(t, "throw Infinity", "throw 1 / 0;\n")
+
+	expectPrintedMangleMinify(t, "x = Infinity", "x=1/0;")
+	expectPrintedMangleMinify(t, "x = -Infinity", "x=-1/0;")
+	expectPrintedMangleMinify(t, "x = (Infinity).toString", "x=(1/0).toString;")
+	expectPrintedMangleMinify(t, "x = (-Infinity).toString", "x=(-1/0).toString;")
+	expectPrintedMangleMinify(t, "x = Infinity ** 2", "x=(1/0)**2;")
+	expectPrintedMangleMinify(t, "x = (-Infinity) ** 2", "x=(-1/0)**2;")
+	expectPrintedMangleMinify(t, "x = Infinity * y", "x=1/0*y;")
+	expectPrintedMangleMinify(t, "x = Infinity / y", "x=1/0/y;")
+	expectPrintedMangleMinify(t, "x = y * Infinity", "x=y*(1/0);")
+	expectPrintedMangleMinify(t, "x = y / Infinity", "x=y/(1/0);")
+	expectPrintedMangleMinify(t, "throw Infinity", "throw 1/0;")
+}
+
+func TestBinaryOperatorVisitor(t *testing.T) {
+	// Make sure the inner "/*b*/" comment doesn't disappear due to weird binary visitor stuff
+	expectPrintedMangle(t, "x = (0, /*a*/ (0, /*b*/ (0, /*c*/ 1 == 2) + 3) * 4)", "x = /*a*/\n/*b*/\n(/*c*/\n!1 + 3) * 4;\n")
+
+	// Make sure deeply-nested ASTs don't cause a stack overflow
+	x := "x = f()" + strings.Repeat(" || f()", 10_000) + ";\n"
+	expectPrinted(t, x, x)
 }

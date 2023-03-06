@@ -9,34 +9,52 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
-func ParseLoader(text string) (api.Loader, error) {
+type ErrorWithNote struct {
+	Text string
+	Note string
+}
+
+func MakeErrorWithNote(text string, note string) *ErrorWithNote {
+	return &ErrorWithNote{
+		Text: text,
+		Note: note,
+	}
+}
+
+func ParseLoader(text string) (api.Loader, *ErrorWithNote) {
 	switch text {
+	case "base64":
+		return api.LoaderBase64, nil
+	case "binary":
+		return api.LoaderBinary, nil
+	case "copy":
+		return api.LoaderCopy, nil
+	case "css":
+		return api.LoaderCSS, nil
+	case "dataurl":
+		return api.LoaderDataURL, nil
+	case "default":
+		return api.LoaderDefault, nil
+	case "empty":
+		return api.LoaderEmpty, nil
+	case "file":
+		return api.LoaderFile, nil
 	case "js":
 		return api.LoaderJS, nil
+	case "json":
+		return api.LoaderJSON, nil
 	case "jsx":
 		return api.LoaderJSX, nil
+	case "text":
+		return api.LoaderText, nil
 	case "ts":
 		return api.LoaderTS, nil
 	case "tsx":
 		return api.LoaderTSX, nil
-	case "css":
-		return api.LoaderCSS, nil
-	case "json":
-		return api.LoaderJSON, nil
-	case "text":
-		return api.LoaderText, nil
-	case "base64":
-		return api.LoaderBase64, nil
-	case "dataurl":
-		return api.LoaderDataURL, nil
-	case "file":
-		return api.LoaderFile, nil
-	case "binary":
-		return api.LoaderBinary, nil
-	case "default":
-		return api.LoaderDefault, nil
 	default:
-		return api.LoaderNone, fmt.Errorf("Invalid loader: %q (valid: "+
-			"js, jsx, ts, tsx, css, json, text, base64, dataurl, file, binary)", text)
+		return api.LoaderNone, MakeErrorWithNote(
+			fmt.Sprintf("Invalid loader value: %q", text),
+			"Valid values are \"base64\", \"binary\", \"copy\", \"css\", \"dataurl\", \"empty\", \"file\", \"js\", \"json\", \"jsx\", \"text\", \"ts\", or \"tsx\".",
+		)
 	}
 }

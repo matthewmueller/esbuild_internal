@@ -2,6 +2,7 @@ package fs
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"sort"
@@ -12,51 +13,52 @@ import (
 
 type realFS struct {
 	// Stores the file entries for directories we've listed before
-	entriesMutex sync.Mutex
-	entries      map[string]entriesOrErr
-
-	// If true, do not use the "entries" cache
-	doNotCacheEntries bool
+	entries map[string]entriesOrErr
 
 	// This stores data that will end up being returned by "WatchData()"
-	watchMutex sync.Mutex
-	watchData  map[string]privateWatchData
+	watchData map[string]privateWatchData
 
 	// When building with WebAssembly, the Go compiler doesn't correctly handle
 	// platform-specific path behavior. Hack around these bugs by compiling
 	// support for both Unix and Windows paths into all executables and switch
 	// between them at run-time instead.
 	fp goFilepath
+
+	entriesMutex sync.Mutex
+	watchMutex   sync.Mutex
+
+	// If true, do not use the "entries" cache
+	doNotCacheEntries bool
 }
 
 type entriesOrErr struct {
-	entries        DirEntries
 	canonicalError error
 	originalError  error
+	entries        DirEntries
 }
 
 type watchState uint8
 
 const (
-	stateNone               watchState = iota
-	stateDirHasEntries                 // Compare "dirEntries"
-	stateDirMissing                    // Compare directory presence
-	stateFileHasModKey                 // Compare "modKey"
-	stateFileNeedModKey                // Need to transition to "stateFileHasModKey" or "stateFileUnusableModKey" before "WatchData()" returns
-	stateFileMissing                   // Compare file presence
-	stateFileUnusableModKey            // Compare "fileContents"
+	stateNone                  watchState = iota
+	stateDirHasAccessedEntries            // Compare "accessedEntries"
+	stateDirUnreadable                    // Compare directory readability
+	stateFileHasModKey                    // Compare "modKey"
+	stateFileNeedModKey                   // Need to transition to "stateFileHasModKey" or "stateFileUnusableModKey" before "WatchData()" returns
+	stateFileMissing                      // Compare file presence
+	stateFileUnusableModKey               // Compare "fileContents"
 )
 
 type privateWatchData struct {
-	dirEntries   []string
-	fileContents string
-	modKey       ModKey
-	state        watchState
+	accessedEntries *accessedEntries
+	fileContents    string
+	modKey          ModKey
+	state           watchState
 }
 
 type RealFSOptions struct {
-	WantWatchData bool
 	AbsWorkingDir string
+	WantWatchData bool
 	DoNotCache    bool
 }
 
@@ -108,12 +110,21 @@ func RealFS(options RealFSOptions) (FS, error) {
 		watchData = make(map[string]privateWatchData)
 	}
 
-	return &realFS{
+	var result FS = &realFS{
 		entries:           make(map[string]entriesOrErr),
 		fp:                fp,
 		watchData:         watchData,
 		doNotCacheEntries: options.DoNotCache,
-	}, nil
+	}
+
+	// Add a wrapper that lets us traverse into ".zip" files. This is what yarn
+	// uses as a package format when in yarn is in its "PnP" mode.
+	result = &zipFS{
+		inner:    result,
+		zipFiles: make(map[string]*zipFile),
+	}
+
+	return result, nil
 }
 
 func (fs *realFS) ReadDirectory(dir string) (entries DirEntries, canonicalError error, originalError error) {
@@ -133,7 +144,7 @@ func (fs *realFS) ReadDirectory(dir string) (entries DirEntries, canonicalError 
 
 	// Cache miss: read the directory entries
 	names, canonicalError, originalError := fs.readdir(dir)
-	entries = DirEntries{dir, make(map[string]*Entry)}
+	entries = DirEntries{dir: dir, data: make(map[string]*Entry)}
 
 	// Unwrap to get the underlying error
 	if pathErr, ok := canonicalError.(*os.PathError); ok {
@@ -157,14 +168,14 @@ func (fs *realFS) ReadDirectory(dir string) (entries DirEntries, canonicalError 
 	if fs.watchData != nil {
 		defer fs.watchMutex.Unlock()
 		fs.watchMutex.Lock()
-		state := stateDirHasEntries
+		state := stateDirHasAccessedEntries
 		if canonicalError != nil {
-			state = stateDirMissing
+			state = stateDirUnreadable
 		}
-		sort.Strings(names)
+		entries.accessedEntries = &accessedEntries{wasPresent: make(map[string]bool)}
 		fs.watchData[dir] = privateWatchData{
-			dirEntries: names,
-			state:      state,
+			accessedEntries: entries.accessedEntries,
+			state:           state,
 		}
 	}
 
@@ -209,6 +220,57 @@ func (fs *realFS) ReadFile(path string) (contents string, canonicalError error, 
 	}
 
 	return fileContents, canonicalError, originalError
+}
+
+type realOpenedFile struct {
+	handle *os.File
+	len    int
+}
+
+func (f *realOpenedFile) Len() int {
+	return f.len
+}
+
+func (f *realOpenedFile) Read(start int, end int) ([]byte, error) {
+	bytes := make([]byte, end-start)
+	remaining := bytes
+
+	_, err := f.handle.Seek(int64(start), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+
+	for len(remaining) > 0 {
+		n, err := f.handle.Read(remaining)
+		if err != nil && n <= 0 {
+			return nil, err
+		}
+		remaining = remaining[n:]
+	}
+
+	return bytes, nil
+}
+
+func (f *realOpenedFile) Close() error {
+	return f.handle.Close()
+}
+
+func (fs *realFS) OpenFile(path string) (OpenedFile, error, error) {
+	BeforeFileOpen()
+	defer AfterFileClose()
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fs.canonicalizeError(err), err
+	}
+
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, fs.canonicalizeError(err), err
+	}
+
+	return &realOpenedFile{f, int(info.Size())}, nil, nil
 }
 
 func (fs *realFS) ModKey(path string) (ModKey, error) {
@@ -287,11 +349,12 @@ func (fs *realFS) readdir(dirname string) (entries []string, canonicalError erro
 	}
 
 	defer f.Close()
-	entries, err := f.Readdirnames(-1)
+	entries, originalError = f.Readdirnames(-1)
+	canonicalError = originalError
 
 	// Unwrap to get the underlying error
-	if syscallErr, ok := err.(*os.SyscallError); ok {
-		err = syscallErr.Unwrap()
+	if syscallErr, ok := canonicalError.(*os.SyscallError); ok {
+		canonicalError = syscallErr.Unwrap()
 	}
 
 	// Don't convert ENOTDIR to ENOENT here. ENOTDIR is a legitimate error
@@ -342,33 +405,21 @@ func (fs *realFS) kind(dir string, base string) (symlink string, kind EntryKind)
 
 	// Follow symlinks now so the cache contains the translation
 	if (mode & os.ModeSymlink) != 0 {
-		symlink = entryPath
-		linksWalked := 0
-		for {
-			linksWalked++
-			if linksWalked > 255 {
-				return // Error: too many links
-			}
-			link, err := os.Readlink(symlink)
-			if err != nil {
-				return // Skip over this entry
-			}
-			if !fs.fp.isAbs(link) {
-				link = fs.fp.join([]string{dir, link})
-			}
-			symlink = fs.fp.clean(link)
-
-			// Re-run "lstat" on the symlink target
-			stat2, err2 := os.Lstat(symlink)
-			if err2 != nil {
-				return // Skip over this entry
-			}
-			mode = stat2.Mode()
-			if (mode & os.ModeSymlink) == 0 {
-				break
-			}
-			dir = fs.fp.dir(symlink)
+		link, err := fs.fp.evalSymlinks(entryPath)
+		if err != nil {
+			return // Skip over this entry
 		}
+
+		// Re-run "lstat" on the symlink target to see if it's a file or not
+		stat2, err2 := os.Lstat(link)
+		if err2 != nil {
+			return // Skip over this entry
+		}
+		mode = stat2.Mode()
+		if (mode & os.ModeSymlink) != 0 {
+			return // This should no longer be a symlink, so this is unexpected
+		}
+		symlink = link
 	}
 
 	// We consider the entry either a directory or a file
@@ -381,7 +432,7 @@ func (fs *realFS) kind(dir string, base string) (symlink string, kind EntryKind)
 }
 
 func (fs *realFS) WatchData() WatchData {
-	paths := make(map[string]func() bool)
+	paths := make(map[string]func() string)
 
 	for path, data := range fs.watchData {
 		// Each closure below needs its own copy of these loop variables
@@ -402,43 +453,71 @@ func (fs *realFS) WatchData() WatchData {
 		}
 
 		switch data.state {
-		case stateDirMissing:
-			paths[path] = func() bool {
-				info, err := os.Stat(path)
-				return err == nil && info.IsDir()
+		case stateDirUnreadable:
+			paths[path] = func() string {
+				_, err, _ := fs.readdir(path)
+				if err == nil {
+					return path
+				}
+				return ""
 			}
 
-		case stateDirHasEntries:
-			paths[path] = func() bool {
+		case stateDirHasAccessedEntries:
+			paths[path] = func() string {
 				names, err, _ := fs.readdir(path)
-				if err != nil || len(names) != len(data.dirEntries) {
-					return true
+				if err != nil {
+					return path
 				}
-				sort.Strings(names)
-				for i, s := range names {
-					if s != data.dirEntries[i] {
-						return true
+				data.accessedEntries.mutex.Lock()
+				defer data.accessedEntries.mutex.Unlock()
+				if allEntries := data.accessedEntries.allEntries; allEntries != nil {
+					// Check all entries
+					if len(names) != len(allEntries) {
+						return path
+					}
+					sort.Strings(names)
+					for i, s := range names {
+						if s != allEntries[i] {
+							return path
+						}
+					}
+				} else {
+					// Check individual entries
+					lookup := make(map[string]string, len(names))
+					for _, name := range names {
+						lookup[strings.ToLower(name)] = name
+					}
+					for name, wasPresent := range data.accessedEntries.wasPresent {
+						if originalName, isPresent := lookup[name]; wasPresent != isPresent {
+							return fs.Join(path, originalName)
+						}
 					}
 				}
-				return false
+				return ""
 			}
 
 		case stateFileMissing:
-			paths[path] = func() bool {
-				info, err := os.Stat(path)
-				return err == nil && !info.IsDir()
+			paths[path] = func() string {
+				if info, err := os.Stat(path); err == nil && !info.IsDir() {
+					return path
+				}
+				return ""
 			}
 
 		case stateFileHasModKey:
-			paths[path] = func() bool {
-				key, err := modKey(path)
-				return err != nil || key != data.modKey
+			paths[path] = func() string {
+				if key, err := modKey(path); err != nil || key != data.modKey {
+					return path
+				}
+				return ""
 			}
 
 		case stateFileUnusableModKey:
-			paths[path] = func() bool {
-				buffer, err := ioutil.ReadFile(path)
-				return err != nil || string(buffer) != data.fileContents
+			paths[path] = func() string {
+				if buffer, err := ioutil.ReadFile(path); err != nil || string(buffer) != data.fileContents {
+					return path
+				}
+				return ""
 			}
 		}
 	}

@@ -3,12 +3,12 @@ package css_parser
 import (
 	"github.com/matthewmueller/esbuild_internal/css_ast"
 	"github.com/matthewmueller/esbuild_internal/css_lexer"
+	"github.com/matthewmueller/esbuild_internal/logger"
 )
 
-func (p *parser) parseSelectorList() (list []css_ast.ComplexSelector, ok bool) {
+func (p *parser) parseSelectorList(opts parseSelectorOpts) (list []css_ast.ComplexSelector, ok bool) {
 	// Parse the first selector
-	p.eat(css_lexer.TWhitespace)
-	sel, good := p.parseComplexSelector()
+	sel, good := p.parseComplexSelector(opts)
 	if !good {
 		return
 	}
@@ -21,7 +21,7 @@ func (p *parser) parseSelectorList() (list []css_ast.ComplexSelector, ok bool) {
 			break
 		}
 		p.eat(css_lexer.TWhitespace)
-		sel, good := p.parseComplexSelector()
+		sel, good := p.parseComplexSelector(opts)
 		if !good {
 			return
 		}
@@ -32,12 +32,23 @@ func (p *parser) parseSelectorList() (list []css_ast.ComplexSelector, ok bool) {
 	return
 }
 
-func (p *parser) parseComplexSelector() (result css_ast.ComplexSelector, ok bool) {
+type parseSelectorOpts struct {
+	isTopLevel bool
+}
+
+func (p *parser) parseComplexSelector(opts parseSelectorOpts) (result css_ast.ComplexSelector, ok bool) {
+	// This is an extension: https://drafts.csswg.org/css-nesting-1/
+	combinator := p.parseCombinator()
+	if combinator != "" {
+		p.eat(css_lexer.TWhitespace)
+	}
+
 	// Parent
-	sel, good := p.parseCompoundSelector()
+	sel, good := p.parseCompoundSelector(opts)
 	if !good {
 		return
 	}
+	sel.Combinator = combinator
 	result.Selectors = append(result.Selectors, sel)
 
 	for {
@@ -53,7 +64,7 @@ func (p *parser) parseComplexSelector() (result css_ast.ComplexSelector, ok bool
 		}
 
 		// Child
-		sel, good := p.parseCompoundSelector()
+		sel, good := p.parseCompoundSelector(opts)
 		if !good {
 			return
 		}
@@ -72,10 +83,10 @@ func (p *parser) nameToken() css_ast.NameToken {
 	}
 }
 
-func (p *parser) parseCompoundSelector() (sel css_ast.CompoundSelector, ok bool) {
+func (p *parser) parseCompoundSelector(opts parseSelectorOpts) (sel css_ast.CompoundSelector, ok bool) {
 	// This is an extension: https://drafts.csswg.org/css-nesting-1/
 	if p.eat(css_lexer.TDelimAmpersand) {
-		sel.HasNestPrefix = true
+		sel.HasNestingSelector = true
 	}
 
 	// Parse the type selector
@@ -107,7 +118,7 @@ subclassSelectors:
 	for {
 		switch p.current().Kind {
 		case css_lexer.THash:
-			if !p.current().IsID {
+			if (p.current().Flags & css_lexer.IsID) == 0 {
 				break subclassSelectors
 			}
 			name := p.decoded()
@@ -121,7 +132,6 @@ subclassSelectors:
 			p.expect(css_lexer.TIdent)
 
 		case css_lexer.TOpenBracket:
-			p.advance()
 			attr, good := p.parseAttributeSelector()
 			if !good {
 				return
@@ -143,7 +153,7 @@ subclassSelectors:
 					// and ::first-letter) may, for legacy reasons, be represented using
 					// the <pseudo-class-selector> grammar, with only a single ":"
 					// character at their start.
-					if p.options.MangleSyntax && isElement && len(pseudo.Args) == 0 {
+					if p.options.MinifySyntax && isElement && len(pseudo.Args) == 0 {
 						switch pseudo.Name {
 						case "before", "after", "first-line", "first-letter":
 							isElement = false
@@ -158,13 +168,21 @@ subclassSelectors:
 			pseudo := p.parsePseudoClassSelector()
 			sel.SubclassSelectors = append(sel.SubclassSelectors, &pseudo)
 
+		case css_lexer.TDelimAmpersand:
+			// This is an extension: https://drafts.csswg.org/css-nesting-1/
+			if !sel.HasNestingSelector {
+				p.maybeWarnAboutNesting(p.current().Range)
+				sel.HasNestingSelector = true
+			}
+			p.advance()
+
 		default:
 			break subclassSelectors
 		}
 	}
 
 	// The compound selector must be non-empty
-	if !sel.HasNestPrefix && sel.TypeSelector == nil && len(sel.SubclassSelectors) == 0 {
+	if !sel.HasNestingSelector && sel.TypeSelector == nil && len(sel.SubclassSelectors) == 0 {
 		p.unexpected()
 		return
 	}
@@ -174,6 +192,9 @@ subclassSelectors:
 }
 
 func (p *parser) parseAttributeSelector() (attr css_ast.SSAttribute, ok bool) {
+	matchingLoc := p.current().Range.Loc
+	p.advance()
+
 	// Parse the namespaced name
 	switch p.current().Kind {
 	case css_lexer.TDelimBar, css_lexer.TDelimAsterisk:
@@ -249,7 +270,7 @@ func (p *parser) parseAttributeSelector() (attr css_ast.SSAttribute, ok bool) {
 		p.eat(css_lexer.TWhitespace)
 		if p.peek(css_lexer.TIdent) {
 			if modifier := p.decoded(); len(modifier) == 1 {
-				if c := modifier[0]; c == 'i' || c == 'I' {
+				if c := modifier[0]; c == 'i' || c == 'I' || c == 's' || c == 'S' {
 					attr.MatcherModifier = c
 					p.advance()
 				}
@@ -257,7 +278,7 @@ func (p *parser) parseAttributeSelector() (attr css_ast.SSAttribute, ok bool) {
 		}
 	}
 
-	p.expect(css_lexer.TCloseBracket)
+	p.expectWithMatchingLoc(css_lexer.TCloseBracket, matchingLoc)
 	ok = true
 	return
 }
@@ -267,9 +288,10 @@ func (p *parser) parsePseudoClassSelector() css_ast.SSPseudoClass {
 
 	if p.peek(css_lexer.TFunction) {
 		text := p.decoded()
+		matchingLoc := logger.Loc{Start: p.current().Range.End() - 1}
 		p.advance()
 		args := p.convertTokens(p.parseAnyValue())
-		p.expect(css_lexer.TCloseParen)
+		p.expectWithMatchingLoc(css_lexer.TCloseParen, matchingLoc)
 		return css_ast.SSPseudoClass{Name: text, Args: args}
 	}
 
@@ -310,6 +332,9 @@ loop:
 
 		case css_lexer.TOpenBrace:
 			p.stack = append(p.stack, css_lexer.TCloseBrace)
+
+		case css_lexer.TEndOfFile:
+			break loop
 		}
 
 		p.advance()
