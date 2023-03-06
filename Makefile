@@ -7,6 +7,7 @@ default:
 	cp ./esbuild/LICENSE.md ./
 	mv ./esbuild/internal/* ./
 	rm -rf esbuild
+	go get -u github.com/evanw/esbuild@$(VERSION)
 	go mod tidy
 	go test ./...
 	if [ `git tag -l "$(VERSION)"` ]; then echo "tag $(VERSION) exists already"; exit 1; fi
