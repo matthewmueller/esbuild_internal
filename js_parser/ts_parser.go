@@ -314,11 +314,12 @@ loop:
 				// Valid:
 				//   "[keyof: string]"
 				//   "{[keyof: string]: number}"
+				//   "{[keyof in string]: number}"
 				//
 				// Invalid:
 				//   "A extends B ? keyof : string"
 				//
-				if p.lexer.Token != js_lexer.TColon || (!flags.has(isIndexSignatureFlag) && !flags.has(allowTupleLabelsFlag)) {
+				if (p.lexer.Token != js_lexer.TColon && p.lexer.Token != js_lexer.TIn) || (!flags.has(isIndexSignatureFlag) && !flags.has(allowTupleLabelsFlag)) {
 					p.skipTypeScriptType(js_ast.LPrefix)
 				}
 				break loop
@@ -329,7 +330,8 @@ loop:
 				// "type Foo = Bar extends [infer T] ? T : null"
 				// "type Foo = Bar extends [infer T extends string] ? T : null"
 				// "type Foo = Bar extends [infer T extends string ? infer T : never] ? T : null"
-				if p.lexer.Token != js_lexer.TColon || (!flags.has(isIndexSignatureFlag) && !flags.has(allowTupleLabelsFlag)) {
+				// "type Foo = { [infer in Bar]: number }"
+				if (p.lexer.Token != js_lexer.TColon && p.lexer.Token != js_lexer.TIn) || (!flags.has(isIndexSignatureFlag) && !flags.has(allowTupleLabelsFlag)) {
 					p.lexer.Expect(js_lexer.TIdentifier)
 					if p.lexer.Token == js_lexer.TExtends {
 						p.trySkipTypeScriptConstraintOfInferTypeWithBacktracking(flags)
@@ -380,7 +382,7 @@ loop:
 
 			// "let foo: any \n <number>foo" must not become a single type
 			if checkTypeParameters && !p.lexer.HasNewlineBefore {
-				p.skipTypeScriptTypeArguments(false /* isInsideJSXElement */)
+				p.skipTypeScriptTypeArguments(skipTypeScriptTypeArgumentsOpts{})
 			}
 
 		case js_lexer.TTypeof:
@@ -412,7 +414,7 @@ loop:
 				}
 
 				if !p.lexer.HasNewlineBefore {
-					p.skipTypeScriptTypeArguments(false /* isInsideJSXElement */)
+					p.skipTypeScriptTypeArguments(skipTypeScriptTypeArgumentsOpts{})
 				}
 			}
 
@@ -508,7 +510,7 @@ loop:
 
 			// "{ <A extends B>(): c.d \n <E extends F>(): g.h }" must not become a single type
 			if !p.lexer.HasNewlineBefore {
-				p.skipTypeScriptTypeArguments(false /* isInsideJSXElement */)
+				p.skipTypeScriptTypeArguments(skipTypeScriptTypeArgumentsOpts{})
 			}
 
 		case js_lexer.TOpenBracket:
@@ -599,7 +601,7 @@ func (p *parser) skipTypeScriptObjectType() {
 		}
 
 		// Type parameters come right after the optional mark
-		p.skipTypeScriptTypeParameters(0)
+		p.skipTypeScriptTypeParameters(allowConstModifier)
 
 		switch p.lexer.Token {
 		case js_lexer.TColon:
@@ -772,7 +774,12 @@ func (p *parser) skipTypeScriptTypeParameters(flags typeParameterFlags) skipType
 	return result
 }
 
-func (p *parser) skipTypeScriptTypeArguments(isInsideJSXElement bool) bool {
+type skipTypeScriptTypeArgumentsOpts struct {
+	isInsideJSXElement               bool
+	isParseTypeArgumentsInExpression bool
+}
+
+func (p *parser) skipTypeScriptTypeArguments(opts skipTypeScriptTypeArgumentsOpts) bool {
 	switch p.lexer.Token {
 	case js_lexer.TLessThan, js_lexer.TLessThanEquals,
 		js_lexer.TLessThanLessThan, js_lexer.TLessThanLessThanEquals:
@@ -791,11 +798,31 @@ func (p *parser) skipTypeScriptTypeArguments(isInsideJSXElement bool) bool {
 	}
 
 	// This type argument list must end with a ">"
-	p.lexer.ExpectGreaterThan(isInsideJSXElement)
+	if !opts.isParseTypeArgumentsInExpression {
+		// Normally TypeScript allows any token starting with ">". For example,
+		// "Array<Array<number>>()" is a type argument list even though there's a
+		// ">>" token, because ">>" starts with ">".
+		p.lexer.ExpectGreaterThan(opts.isInsideJSXElement)
+	} else {
+		// However, if we're emulating the TypeScript compiler's function called
+		// "parseTypeArgumentsInExpression" function, then we must only allow the
+		// ">" token itself. For example, "x < y >= z" is not a type argument list.
+		//
+		// This doesn't detect ">>" in "Array<Array<number>>()" because the inner
+		// type argument list isn't a call to "parseTypeArgumentsInExpression"
+		// because it's within a type context, not an expression context. So the
+		// token that we see here is ">" in that case because the first ">" has
+		// already been stripped off of the ">>" by the inner call.
+		if opts.isInsideJSXElement {
+			p.lexer.ExpectInsideJSXElement(js_lexer.TGreaterThan)
+		} else {
+			p.lexer.Expect(js_lexer.TGreaterThan)
+		}
+	}
 	return true
 }
 
-func (p *parser) trySkipTypeScriptTypeArgumentsWithBacktracking() bool {
+func (p *parser) trySkipTypeArgumentsInExpressionWithBacktracking() bool {
 	oldLexer := p.lexer
 	p.lexer.IsLogDisabled = true
 
@@ -809,7 +836,7 @@ func (p *parser) trySkipTypeScriptTypeArgumentsWithBacktracking() bool {
 		}
 	}()
 
-	if p.skipTypeScriptTypeArguments(false /* isInsideJSXElement */) {
+	if p.skipTypeScriptTypeArguments(skipTypeScriptTypeArgumentsOpts{isParseTypeArgumentsInExpression: true}) {
 		// Check the token after the type argument list and backtrack if it's invalid
 		if !p.tsCanFollowTypeArgumentsInExpression() {
 			p.lexer.Unexpected()
@@ -1234,67 +1261,6 @@ func (p *parser) skipTypeScriptTypeStmt(opts parseStmtOpts) {
 	p.lexer.ExpectOrInsertSemicolon()
 }
 
-func (p *parser) parseTypeScriptDecorators(tsDecoratorScope *js_ast.Scope) []js_ast.Expr {
-	var tsDecorators []js_ast.Expr
-
-	if p.options.ts.Parse {
-		// TypeScript decorators cause us to temporarily revert to the scope that
-		// encloses the class declaration, since that's where the generated code
-		// for TypeScript decorators will be inserted.
-		oldScope := p.currentScope
-		p.currentScope = tsDecoratorScope
-
-		for p.lexer.Token == js_lexer.TAt {
-			loc := p.lexer.Loc()
-			p.lexer.Next()
-
-			// Parse a new/call expression with "exprFlagTSDecorator" so we ignore
-			// EIndex expressions, since they may be part of a computed property:
-			//
-			//   class Foo {
-			//     @foo ['computed']() {}
-			//   }
-			//
-			// This matches the behavior of the TypeScript compiler.
-			value := p.parseExprWithFlags(js_ast.LNew, exprFlagTSDecorator)
-			value.Loc = loc
-			tsDecorators = append(tsDecorators, value)
-		}
-
-		// Avoid "popScope" because this decorator scope is not hierarchical
-		p.currentScope = oldScope
-	}
-
-	return tsDecorators
-}
-
-func (p *parser) logInvalidDecoratorError(classKeyword logger.Range) {
-	if p.options.ts.Parse && p.lexer.Token == js_lexer.TAt {
-		// Forbid decorators inside class expressions
-		p.lexer.AddRangeErrorWithNotes(p.lexer.Range(), "Decorators can only be used with class declarations in TypeScript",
-			[]logger.MsgData{p.tracker.MsgData(classKeyword, "This is a class expression, not a class declaration:")})
-
-		// Parse and discard decorators for error recovery
-		scopeIndex := len(p.scopesInOrder)
-		p.parseTypeScriptDecorators(p.currentScope)
-		p.discardScopesUpTo(scopeIndex)
-	}
-}
-
-func (p *parser) logMisplacedDecoratorError(tsDecorators *deferredTSDecorators) {
-	found := fmt.Sprintf("%q", p.lexer.Raw())
-	if p.lexer.Token == js_lexer.TEndOfFile {
-		found = "end of file"
-	}
-
-	// Try to be helpful by pointing out the decorator
-	p.lexer.AddRangeErrorWithNotes(p.lexer.Range(), fmt.Sprintf("Expected \"class\" after TypeScript decorator but found %s", found), []logger.MsgData{
-		p.tracker.MsgData(logger.Range{Loc: tsDecorators.values[0].Loc}, "The preceding TypeScript decorator is here:"),
-		{Text: "Decorators can only be used with class declarations in TypeScript."},
-	})
-	p.discardScopesUpTo(tsDecorators.scopeIndex)
-}
-
 func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_ast.Stmt {
 	p.lexer.Expect(js_lexer.TEnum)
 	nameLoc := p.lexer.Loc()
@@ -1454,7 +1420,7 @@ func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_
 			p.hasNonLocalExportDeclareInsideNamespace = true
 		}
 
-		return js_ast.Stmt{Loc: loc, Data: &js_ast.STypeScript{}}
+		return js_ast.Stmt{Loc: loc, Data: js_ast.STypeScriptShared}
 	}
 
 	// Save these for when we do out-of-order enum visiting
@@ -1510,7 +1476,7 @@ func (p *parser) parseTypeScriptImportEqualsStmt(loc logger.Loc, opts parseStmtO
 	if opts.isTypeScriptDeclare {
 		// "import type foo = require('bar');"
 		// "import type foo = bar.baz;"
-		return js_ast.Stmt{Loc: loc, Data: &js_ast.STypeScript{}}
+		return js_ast.Stmt{Loc: loc, Data: js_ast.STypeScriptShared}
 	}
 
 	ref := p.declareSymbol(js_ast.SymbolConst, defaultNameLoc, defaultName)
@@ -1670,7 +1636,15 @@ func (p *parser) parseTypeScriptNamespaceStmt(loc logger.Loc, opts parseStmtOpts
 
 		case *js_ast.SLocal:
 			if s.IsExport {
-				p.exportDeclsInsideNamespace(exportedMembers, s.Decls)
+				js_ast.ForEachIdentifierBindingInDecls(s.Decls, func(loc logger.Loc, b *js_ast.BIdentifier) {
+					name := p.symbols[b.Ref.InnerIndex].OriginalName
+					member := js_ast.TSNamespaceMember{
+						Loc:  loc,
+						Data: &js_ast.TSNamespaceMemberProperty{},
+					}
+					exportedMembers[name] = member
+					p.refToTSNamespaceMemberData[b.Ref] = member.Data
+				})
 			}
 		}
 	}
@@ -1701,7 +1675,7 @@ func (p *parser) parseTypeScriptNamespaceStmt(loc logger.Loc, opts parseStmtOpts
 		if opts.isModuleScope {
 			p.localTypeNames[nameText] = true
 		}
-		return js_ast.Stmt{Loc: loc, Data: &js_ast.STypeScript{}}
+		return js_ast.Stmt{Loc: loc, Data: js_ast.STypeScriptShared}
 	}
 
 	if !opts.isTypeScriptDeclare {
@@ -1744,40 +1718,6 @@ func (p *parser) parseTypeScriptNamespaceStmt(loc logger.Loc, opts parseStmtOpts
 		Stmts:    stmts,
 		IsExport: opts.isExport,
 	}}
-}
-
-func (p *parser) exportDeclsInsideNamespace(exportedMembers js_ast.TSNamespaceMembers, decls []js_ast.Decl) {
-	for _, decl := range decls {
-		p.exportBindingInsideNamespace(exportedMembers, decl.Binding)
-	}
-}
-
-func (p *parser) exportBindingInsideNamespace(exportedMembers js_ast.TSNamespaceMembers, binding js_ast.Binding) {
-	switch b := binding.Data.(type) {
-	case *js_ast.BMissing:
-
-	case *js_ast.BIdentifier:
-		name := p.symbols[b.Ref.InnerIndex].OriginalName
-		member := js_ast.TSNamespaceMember{
-			Loc:  binding.Loc,
-			Data: &js_ast.TSNamespaceMemberProperty{},
-		}
-		exportedMembers[name] = member
-		p.refToTSNamespaceMemberData[b.Ref] = member.Data
-
-	case *js_ast.BArray:
-		for _, item := range b.Items {
-			p.exportBindingInsideNamespace(exportedMembers, item.Binding)
-		}
-
-	case *js_ast.BObject:
-		for _, property := range b.Properties {
-			p.exportBindingInsideNamespace(exportedMembers, property.Value)
-		}
-
-	default:
-		panic("Internal error")
-	}
 }
 
 func (p *parser) generateClosureForTypeScriptNamespaceOrEnum(

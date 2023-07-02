@@ -1,6 +1,7 @@
 package bundler_tests
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/matthewmueller/esbuild_internal/compat"
@@ -128,9 +129,9 @@ func TestTSDeclareClassFields(t *testing.T) {
 				}
 				(() => new Bar())()
 			`,
-			"/define-true/tsconfig.json": `{
+			"/define-false/tsconfig.json": `{
 				"compilerOptions": {
-					"useDefineForClassFields": true
+					"useDefineForClassFields": false
 				}
 			}`,
 		},
@@ -422,6 +423,47 @@ func TestTSExportNamespace(t *testing.T) {
 	})
 }
 
+func TestTSNamespaceKeepNames(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				namespace ns {
+					export let foo = () => {}
+					export function bar() {}
+					export class Baz {}
+				}
+			`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			KeepNames:     true,
+		},
+	})
+}
+
+func TestTSNamespaceKeepNamesTargetES2015(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				namespace ns {
+					export let foo = () => {}
+					export function bar() {}
+					export class Baz {}
+				}
+			`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:                  config.ModeBundle,
+			AbsOutputFile:         "/out.js",
+			KeepNames:             true,
+			UnsupportedJSFeatures: es(2015),
+		},
+	})
+}
+
 func TestTSMinifyEnum(t *testing.T) {
 	ts_suite.expectBundled(t, bundled{
 		files: map[string]string{
@@ -604,12 +646,90 @@ func TestTSMinifyDerivedClass(t *testing.T) {
 					}
 				}
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": false
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
 			MinifySyntax:          true,
 			UnsupportedJSFeatures: es(2015),
 			AbsOutputFile:         "/out.js",
+		},
+	})
+}
+
+func TestTSMinifyEnumPropertyNames(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				import { CrossFileGood, CrossFileBad } from './cross-file'
+				const enum SameFileGood {
+					STR = 'str 1',
+					NUM = 123,
+				}
+				const enum SameFileBad {
+					PROTO = '__proto__',
+					CONSTRUCTOR = 'constructor',
+					PROTOTYPE = 'prototype',
+				}
+				class Foo {
+					[100] = 100;
+					'200' = 200;
+					['300'] = 300;
+					[SameFileGood.STR] = SameFileGood.STR;
+					[SameFileGood.NUM] = SameFileGood.NUM;
+					[CrossFileGood.STR] = CrossFileGood.STR;
+					[CrossFileGood.NUM] = CrossFileGood.NUM;
+				}
+				shouldNotBeComputed(
+					class {
+						[100] = 100;
+						'200' = 200;
+						['300'] = 300;
+						[SameFileGood.STR] = SameFileGood.STR;
+						[SameFileGood.NUM] = SameFileGood.NUM;
+						[CrossFileGood.STR] = CrossFileGood.STR;
+						[CrossFileGood.NUM] = CrossFileGood.NUM;
+					},
+					{
+						[100]: 100,
+						'200': 200,
+						['300']: 300,
+						[SameFileGood.STR]: SameFileGood.STR,
+						[SameFileGood.NUM]: SameFileGood.NUM,
+						[CrossFileGood.STR]: CrossFileGood.STR,
+						[CrossFileGood.NUM]: CrossFileGood.NUM,
+					},
+				)
+				mustBeComputed(
+					{ [SameFileBad.PROTO]: null },
+					{ [CrossFileBad.PROTO]: null },
+					class { [SameFileBad.CONSTRUCTOR]() {} },
+					class { [CrossFileBad.CONSTRUCTOR]() {} },
+					class { static [SameFileBad.PROTOTYPE]() {} },
+					class { static [CrossFileBad.PROTOTYPE]() {} },
+				)
+			`,
+			"/cross-file.ts": `
+				export const enum CrossFileGood {
+					STR = 'str 2',
+					NUM = 321,
+				}
+				export const enum CrossFileBad {
+					PROTO = '__proto__',
+					CONSTRUCTOR = 'constructor',
+					PROTOTYPE = 'prototype',
+				}
+			`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			MinifySyntax:  true,
+			AbsOutputFile: "/out.js",
 		},
 	})
 }
@@ -798,7 +918,56 @@ func TestTSMinifiedBundleCommonJS(t *testing.T) {
 	})
 }
 
-func TestTypeScriptDecorators(t *testing.T) {
+func TestTSExperimentalDecoratorsNoConfig(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				declare let x: any, y: any
+				@x.y()
+				@(new y.x)
+				export default class Foo {
+					@x @y mUndef: any
+					@x @y mDef = 1
+					@x @y method() { return new Foo }
+					@x @y declare mDecl: any
+					@x @y accessor aUndef: any
+					@x @y accessor aDef = 1
+
+					@x @y static sUndef: any
+					@x @y static sDef = new Foo
+					@x @y static sMethod() { return new Foo }
+					@x @y static declare sDecl: any
+					@x @y static accessor asUndef: any
+					@x @y static accessor asDef = 1
+
+					@x @y #mUndef: any
+					@x @y #mDef = 1
+					@x @y #method() { return new Foo }
+					@x @y accessor #aUndef: any
+					@x @y accessor #aDef = 1
+
+					@x @y static #sUndef: any
+					@x @y static #sDef = 1
+					@x @y static #sMethod() { return new Foo }
+					@x @y static accessor #asUndef: any
+					@x @y static accessor #asDef = 1
+				}
+			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"experimentalDecorators": false
+				}
+			}`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+		},
+	})
+}
+
+func TestTSExperimentalDecorators(t *testing.T) {
 	ts_suite.expectBundled(t, bundled{
 		files: map[string]string{
 			"/entry.js": `
@@ -935,6 +1104,12 @@ func TestTypeScriptDecorators(t *testing.T) {
 					return Foo;
 				}
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": false,
+					"experimentalDecorators": true
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.js"},
 		options: config.Options{
@@ -944,13 +1119,18 @@ func TestTypeScriptDecorators(t *testing.T) {
 	})
 }
 
-func TestTypeScriptDecoratorsKeepNames(t *testing.T) {
+func TestTSExperimentalDecoratorsKeepNames(t *testing.T) {
 	ts_suite.expectBundled(t, bundled{
 		files: map[string]string{
 			"/entry.ts": `
 				@decoratorMustComeAfterName
-				class Foo {}
+				export class Foo {}
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"experimentalDecorators": true
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
@@ -962,7 +1142,7 @@ func TestTypeScriptDecoratorsKeepNames(t *testing.T) {
 }
 
 // See: https://github.com/evanw/esbuild/issues/2147
-func TestTypeScriptDecoratorScopeIssue2147(t *testing.T) {
+func TestTSExperimentalDecoratorScopeIssue2147(t *testing.T) {
 	ts_suite.expectBundled(t, bundled{
 		files: map[string]string{
 			"/entry.ts": `
@@ -989,6 +1169,12 @@ func TestTypeScriptDecoratorScopeIssue2147(t *testing.T) {
 					}
 				}
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": false,
+					"experimentalDecorators": true
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
@@ -1117,6 +1303,11 @@ func TestTSExportDefaultTypeIssue316(t *testing.T) {
 				export default foo
 				export let bar = 123
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": false
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
@@ -1230,9 +1421,11 @@ func TestExportTypeIssue379(t *testing.T) {
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModeBundle,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.False,
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			TS: config.TSOptions{Config: config.TSConfig{
+				UseDefineForClassFields: config.False,
+			}},
 		},
 	})
 }
@@ -1269,9 +1462,11 @@ func TestThisInsideFunctionTS(t *testing.T) {
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModeBundle,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.False,
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			TS: config.TSOptions{Config: config.TSConfig{
+				UseDefineForClassFields: config.False,
+			}},
 		},
 	})
 }
@@ -1308,9 +1503,11 @@ func TestThisInsideFunctionTSUseDefineForClassFields(t *testing.T) {
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModeBundle,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.True,
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			TS: config.TSOptions{Config: config.TSConfig{
+				UseDefineForClassFields: config.True,
+			}},
 		},
 	})
 }
@@ -1344,6 +1541,11 @@ func TestThisInsideFunctionTSNoBundle(t *testing.T) {
 					new Bar(bar(objBar))
 				}
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": false
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
@@ -1385,9 +1587,11 @@ func TestThisInsideFunctionTSNoBundleUseDefineForClassFields(t *testing.T) {
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModePassThrough,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.True,
+			Mode:          config.ModePassThrough,
+			AbsOutputFile: "/out.js",
+			TS: config.TSOptions{Config: config.TSConfig{
+				UseDefineForClassFields: config.True,
+			}},
 		},
 	})
 }
@@ -1406,12 +1610,17 @@ func TestTSComputedClassFieldUseDefineFalse(t *testing.T) {
 				}
 				new Foo()
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": false,
+					"experimentalDecorators": true
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModePassThrough,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.False,
+			Mode:          config.ModePassThrough,
+			AbsOutputFile: "/out.js",
 		},
 	})
 }
@@ -1430,12 +1639,17 @@ func TestTSComputedClassFieldUseDefineTrue(t *testing.T) {
 				}
 				new Foo()
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": true,
+					"experimentalDecorators": true
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModePassThrough,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.True,
+			Mode:          config.ModePassThrough,
+			AbsOutputFile: "/out.js",
 		},
 	})
 }
@@ -1454,13 +1668,18 @@ func TestTSComputedClassFieldUseDefineTrueLower(t *testing.T) {
 				}
 				new Foo()
 			`,
+			"/tsconfig.json": `{
+				"compilerOptions": {
+					"useDefineForClassFields": true,
+					"experimentalDecorators": true
+				}
+			}`,
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModePassThrough,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.True,
-			UnsupportedJSFeatures:   compat.ClassField,
+			Mode:                  config.ModePassThrough,
+			AbsOutputFile:         "/out.js",
+			UnsupportedJSFeatures: compat.ClassField,
 		},
 	})
 }
@@ -1483,9 +1702,11 @@ func TestTSAbstractClassFieldUseAssign(t *testing.T) {
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModePassThrough,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.False,
+			Mode:          config.ModePassThrough,
+			AbsOutputFile: "/out.js",
+			TS: config.TSOptions{Config: config.TSConfig{
+				UseDefineForClassFields: config.False,
+			}},
 		},
 	})
 }
@@ -1508,9 +1729,11 @@ func TestTSAbstractClassFieldUseDefine(t *testing.T) {
 		},
 		entryPaths: []string{"/entry.ts"},
 		options: config.Options{
-			Mode:                    config.ModePassThrough,
-			AbsOutputFile:           "/out.js",
-			UseDefineForClassFields: config.True,
+			Mode:          config.ModePassThrough,
+			AbsOutputFile: "/out.js",
+			TS: config.TSOptions{Config: config.TSConfig{
+				UseDefineForClassFields: config.True,
+			}},
 		},
 	})
 }
@@ -1585,9 +1808,9 @@ func TestTSSideEffectsFalseWarningTypeDeclarations(t *testing.T) {
 			AbsOutputFile: "/out.js",
 		},
 		expectedScanLog: `entry.ts: WARNING: Ignoring this import because "node_modules/some-js/foo.js" was marked as having no side effects
-node_modules/some-js/package.json: NOTE: "sideEffects" is false in the enclosing "package.json" file
+node_modules/some-js/package.json: NOTE: "sideEffects" is false in the enclosing "package.json" file:
 entry.ts: WARNING: Ignoring this import because "node_modules/some-ts/foo.ts" was marked as having no side effects
-node_modules/some-ts/package.json: NOTE: "sideEffects" is false in the enclosing "package.json" file
+node_modules/some-ts/package.json: NOTE: "sideEffects" is false in the enclosing "package.json" file:
 `,
 	})
 }
@@ -1943,6 +2166,48 @@ func TestTSEnumCrossModuleInliningReExport(t *testing.T) {
 	})
 }
 
+func TestTSEnumCrossModuleInliningMinifyIndexIntoDot(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				const enum Foo {
+					foo1 = 'abc',
+					foo2 = 'a b c',
+				}
+				import { Bar } from './lib'
+				inlined = [
+					obj[Foo.foo1],
+					obj[Bar.bar1],
+					obj?.[Foo.foo1],
+					obj?.[Bar.bar1],
+					obj?.prop[Foo.foo1],
+					obj?.prop[Bar.bar1],
+				]
+				notInlined = [
+					obj[Foo.foo2],
+					obj[Bar.bar2],
+					obj?.[Foo.foo2],
+					obj?.[Bar.bar2],
+					obj?.prop[Foo.foo2],
+					obj?.prop[Bar.bar2],
+				]
+			`,
+			"/lib.ts": `
+				export const enum Bar {
+					bar1 = 'xyz',
+					bar2 = 'x y z',
+				}
+			`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			MinifySyntax:  true,
+		},
+	})
+}
+
 func TestTSEnumCrossModuleTreeShaking(t *testing.T) {
 	ts_suite.expectBundled(t, bundled{
 		files: map[string]string{
@@ -2277,6 +2542,212 @@ func TestTSEnumUseBeforeDeclare(t *testing.T) {
 		options: config.Options{
 			Mode:         config.ModeBundle,
 			AbsOutputDir: "/out",
+		},
+	})
+}
+
+func TestTSPreferJSOverTSInsideNodeModules(t *testing.T) {
+	// We now prefer ".js" over ".ts" inside "node_modules"
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/Users/user/project/src/main.ts": `
+				// Implicit extensions
+				import './relative/path'
+				import 'package/path'
+
+				// Explicit extensions
+				import './relative2/path.js'
+				import 'package2/path.js'
+			`,
+
+			"/Users/user/project/src/relative/path.ts": `console.log('success')`,
+			"/Users/user/project/src/relative/path.js": `console.log('FAILURE')`,
+
+			"/Users/user/project/src/relative2/path.ts": `console.log('FAILURE')`,
+			"/Users/user/project/src/relative2/path.js": `console.log('success')`,
+
+			"/Users/user/project/node_modules/package/path.ts": `console.log('FAILURE')`,
+			"/Users/user/project/node_modules/package/path.js": `console.log('success')`,
+
+			"/Users/user/project/node_modules/package2/path.ts": `console.log('FAILURE')`,
+			"/Users/user/project/node_modules/package2/path.js": `console.log('success')`,
+		},
+		entryPaths: []string{"/Users/user/project/src/main.ts"},
+		options: config.Options{
+			Mode:         config.ModeBundle,
+			AbsOutputDir: "/out",
+		},
+	})
+}
+
+func TestTSExperimentalDecoratorsManglePropsDefineSemantics(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				class Foo {
+					@dec(1) prop1 = null
+					@dec(2) prop2_ = null
+					@dec(3) ['prop3'] = null
+					@dec(4) ['prop4_'] = null
+					@dec(5) [/* @__KEY__ */ 'prop5'] = null
+					@dec(6) [/* @__KEY__ */ 'prop6_'] = null
+				}
+			`,
+			"/tsconfig.json": `{
+        "compilerOptions": {
+          "experimentalDecorators": true,
+          "useDefineForClassFields": true,
+        },
+			}`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			MangleProps:   regexp.MustCompile("_$"),
+		},
+	})
+}
+
+func TestTSExperimentalDecoratorsManglePropsAssignSemantics(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				class Foo {
+					@dec(1) prop1 = null
+					@dec(2) prop2_ = null
+					@dec(3) ['prop3'] = null
+					@dec(4) ['prop4_'] = null
+					@dec(5) [/* @__KEY__ */ 'prop5'] = null
+					@dec(6) [/* @__KEY__ */ 'prop6_'] = null
+				}
+			`,
+			"/tsconfig.json": `{
+        "compilerOptions": {
+          "experimentalDecorators": true,
+          "useDefineForClassFields": false,
+        },
+			}`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			MangleProps:   regexp.MustCompile("_$"),
+		},
+	})
+}
+
+func TestTSExperimentalDecoratorsManglePropsMethods(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				class Foo {
+					@dec(1) prop1() {}
+					@dec(2) prop2_() {}
+					@dec(3) ['prop3']() {}
+					@dec(4) ['prop4_']() {}
+					@dec(5) [/* @__KEY__ */ 'prop5']() {}
+					@dec(6) [/* @__KEY__ */ 'prop6_']() {}
+				}
+			`,
+			"/tsconfig.json": `{
+        "compilerOptions": {
+          "experimentalDecorators": true,
+        },
+			}`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			MangleProps:   regexp.MustCompile("_$"),
+		},
+	})
+}
+
+func TestTSExperimentalDecoratorsManglePropsStaticDefineSemantics(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				class Foo {
+					@dec(1) static prop1 = null
+					@dec(2) static prop2_ = null
+					@dec(3) static ['prop3'] = null
+					@dec(4) static ['prop4_'] = null
+					@dec(5) static [/* @__KEY__ */ 'prop5'] = null
+					@dec(6) static [/* @__KEY__ */ 'prop6_'] = null
+				}
+			`,
+			"/tsconfig.json": `{
+        "compilerOptions": {
+          "experimentalDecorators": true,
+          "useDefineForClassFields": true,
+        },
+			}`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			MangleProps:   regexp.MustCompile("_$"),
+		},
+	})
+}
+
+func TestTSExperimentalDecoratorsManglePropsStaticAssignSemantics(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				class Foo {
+					@dec(1) static prop1 = null
+					@dec(2) static prop2_ = null
+					@dec(3) static ['prop3'] = null
+					@dec(4) static ['prop4_'] = null
+					@dec(5) static [/* @__KEY__ */ 'prop5'] = null
+					@dec(6) static [/* @__KEY__ */ 'prop6_'] = null
+				}
+			`,
+			"/tsconfig.json": `{
+        "compilerOptions": {
+          "experimentalDecorators": true,
+          "useDefineForClassFields": false,
+        },
+			}`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			MangleProps:   regexp.MustCompile("_$"),
+		},
+	})
+}
+
+func TestTSExperimentalDecoratorsManglePropsStaticMethods(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/entry.ts": `
+				class Foo {
+					@dec(1) static prop1() {}
+					@dec(2) static prop2_() {}
+					@dec(3) static ['prop3']() {}
+					@dec(4) static ['prop4_']() {}
+					@dec(5) static [/* @__KEY__ */ 'prop5']() {}
+					@dec(6) static [/* @__KEY__ */ 'prop6_']() {}
+				}
+			`,
+			"/tsconfig.json": `{
+        "compilerOptions": {
+          "experimentalDecorators": true,
+        },
+			}`,
+		},
+		entryPaths: []string{"/entry.ts"},
+		options: config.Options{
+			Mode:          config.ModeBundle,
+			AbsOutputFile: "/out.js",
+			MangleProps:   regexp.MustCompile("_$"),
 		},
 	})
 }

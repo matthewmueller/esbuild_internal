@@ -3,6 +3,7 @@ package css_printer
 import (
 	"testing"
 
+	"github.com/matthewmueller/esbuild_internal/config"
 	"github.com/matthewmueller/esbuild_internal/css_parser"
 	"github.com/matthewmueller/esbuild_internal/logger"
 	"github.com/matthewmueller/esbuild_internal/test"
@@ -13,9 +14,9 @@ func expectPrintedCommon(t *testing.T, name string, contents string, expected st
 	t.Run(name, func(t *testing.T) {
 		t.Helper()
 		log := logger.NewDeferLog(logger.DeferLogNoVerboseOrDebug, nil)
-		tree := css_parser.Parse(log, test.SourceForTest(contents), css_parser.Options{
+		tree := css_parser.Parse(log, test.SourceForTest(contents), css_parser.OptionsFromConfig(&config.Options{
 			MinifyWhitespace: options.MinifyWhitespace,
-		})
+		}))
 		msgs := log.Done()
 		text := ""
 		for _, msg := range msgs {
@@ -128,6 +129,16 @@ func TestSelector(t *testing.T) {
 	expectPrintedMinify(t, ":unknown( x ( a + b ), 'c' ) {}", ":unknown(x (a + b),\"c\"){}")
 	expectPrintedMinify(t, ":unknown( x ( a - b ), 'c' ) {}", ":unknown(x (a - b),\"c\"){}")
 	expectPrintedMinify(t, ":unknown( x ( a , b ), 'c' ) {}", ":unknown(x (a,b),\"c\"){}")
+
+	// ":foo()" is a parse error, but should ideally still be preserved so they don't accidentally become valid
+	expectPrinted(t, ":is {}", ":is {\n}\n")
+	expectPrinted(t, ":is() {}", ":is() {\n}\n")
+	expectPrinted(t, ":hover {}", ":hover {\n}\n")
+	expectPrinted(t, ":hover() {}", ":hover() {\n}\n")
+	expectPrintedMinify(t, ":is {}", ":is{}")
+	expectPrintedMinify(t, ":is() {}", ":is(){}")
+	expectPrintedMinify(t, ":hover {}", ":hover{}")
+	expectPrintedMinify(t, ":hover() {}", ":hover(){}")
 }
 
 func TestNestedSelector(t *testing.T) {

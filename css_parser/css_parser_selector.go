@@ -1,50 +1,132 @@
 package css_parser
 
 import (
+	"fmt"
+
 	"github.com/matthewmueller/esbuild_internal/css_ast"
 	"github.com/matthewmueller/esbuild_internal/css_lexer"
 	"github.com/matthewmueller/esbuild_internal/logger"
 )
 
+type parseSelectorOpts struct {
+	isDeclarationContext bool
+}
+
 func (p *parser) parseSelectorList(opts parseSelectorOpts) (list []css_ast.ComplexSelector, ok bool) {
 	// Parse the first selector
-	sel, good := p.parseComplexSelector(opts)
+	sel, good := p.parseComplexSelector(parseComplexSelectorOpts{
+		parseSelectorOpts: opts,
+		isFirst:           true,
+	})
 	if !good {
 		return
 	}
 	list = append(list, sel)
 
 	// Parse the remaining selectors
+skip:
 	for {
 		p.eat(css_lexer.TWhitespace)
 		if !p.eat(css_lexer.TComma) {
 			break
 		}
 		p.eat(css_lexer.TWhitespace)
-		sel, good := p.parseComplexSelector(opts)
+		sel, good := p.parseComplexSelector(parseComplexSelectorOpts{
+			parseSelectorOpts: opts,
+		})
 		if !good {
 			return
 		}
+
+		// Omit duplicate selectors
+		if p.options.minifySyntax {
+			for _, existing := range list {
+				if sel.Equal(existing, nil) {
+					continue skip
+				}
+			}
+		}
+
 		list = append(list, sel)
+	}
+
+	if p.options.minifySyntax {
+		for i := 1; i < len(list); i++ {
+			if analyzeLeadingAmpersand(list[i], opts.isDeclarationContext) != cannotRemoveLeadingAmpersand {
+				list[i].Selectors = list[i].Selectors[1:]
+			}
+		}
+
+		switch analyzeLeadingAmpersand(list[0], opts.isDeclarationContext) {
+		case canAlwaysRemoveLeadingAmpersand:
+			list[0].Selectors = list[0].Selectors[1:]
+
+		case canRemoveLeadingAmpersandIfNotFirst:
+			for i := 1; i < len(list); i++ {
+				if sel := list[i].Selectors[0]; !sel.HasNestingSelector && (sel.Combinator != 0 || sel.TypeSelector == nil) {
+					list[0].Selectors = list[0].Selectors[1:]
+					list[0], list[i] = list[i], list[0]
+					break
+				}
+			}
+		}
 	}
 
 	ok = true
 	return
 }
 
-type parseSelectorOpts struct {
-	isTopLevel bool
+type leadingAmpersand uint8
+
+const (
+	cannotRemoveLeadingAmpersand leadingAmpersand = iota
+	canAlwaysRemoveLeadingAmpersand
+	canRemoveLeadingAmpersandIfNotFirst
+)
+
+func analyzeLeadingAmpersand(sel css_ast.ComplexSelector, isDeclarationContext bool) leadingAmpersand {
+	if len(sel.Selectors) > 1 {
+		if first := sel.Selectors[0]; first.IsSingleAmpersand() {
+			if second := sel.Selectors[1]; second.Combinator == 0 && second.HasNestingSelector {
+				// ".foo { & &.bar {} }" => ".foo { & &.bar {} }"
+			} else if second.Combinator != 0 || second.TypeSelector == nil || !isDeclarationContext {
+				// "& + div {}" => "+ div {}"
+				// "& div {}" => "div {}"
+				// ".foo { & + div {} }" => ".foo { + div {} }"
+				// ".foo { & + &.bar {} }" => ".foo { + &.bar {} }"
+				// ".foo { & :hover {} }" => ".foo { :hover {} }"
+				return canAlwaysRemoveLeadingAmpersand
+			} else {
+				// ".foo { & div {} }"
+				// ".foo { .bar, & div {} }" => ".foo { .bar, div {} }"
+				return canRemoveLeadingAmpersandIfNotFirst
+			}
+		}
+	} else {
+		// "& {}" => "& {}"
+	}
+	return cannotRemoveLeadingAmpersand
 }
 
-func (p *parser) parseComplexSelector(opts parseSelectorOpts) (result css_ast.ComplexSelector, ok bool) {
+type parseComplexSelectorOpts struct {
+	parseSelectorOpts
+	isFirst bool
+}
+
+func (p *parser) parseComplexSelector(opts parseComplexSelectorOpts) (result css_ast.ComplexSelector, ok bool) {
 	// This is an extension: https://drafts.csswg.org/css-nesting-1/
+	r := p.current().Range
 	combinator := p.parseCombinator()
-	if combinator != "" {
+	if combinator != 0 {
+		p.reportUseOfNesting(r, opts.isDeclarationContext)
 		p.eat(css_lexer.TWhitespace)
 	}
 
 	// Parent
-	sel, good := p.parseCompoundSelector(opts)
+	sel, good := p.parseCompoundSelector(parseComplexSelectorOpts{
+		parseSelectorOpts: opts.parseSelectorOpts,
+		isFirst:           opts.isFirst,
+	})
 	if !good {
 		return
 	}
@@ -59,12 +141,14 @@ func (p *parser) parseComplexSelector(opts parseSelectorOpts) (result css_ast.Co
 
 		// Optional combinator
 		combinator := p.parseCombinator()
-		if combinator != "" {
+		if combinator != 0 {
 			p.eat(css_lexer.TWhitespace)
 		}
 
 		// Child
-		sel, good := p.parseCompoundSelector(opts)
+		sel, good := p.parseCompoundSelector(parseComplexSelectorOpts{
+			parseSelectorOpts: opts.parseSelectorOpts,
+		})
 		if !good {
 			return
 		}
@@ -83,13 +167,19 @@ func (p *parser) nameToken() css_ast.NameToken {
 	}
 }
 
-func (p *parser) parseCompoundSelector(opts parseSelectorOpts) (sel css_ast.CompoundSelector, ok bool) {
+func (p *parser) parseCompoundSelector(opts parseComplexSelectorOpts) (sel css_ast.CompoundSelector, ok bool) {
+	startLoc := p.current().Range.Loc
+
 	// This is an extension: https://drafts.csswg.org/css-nesting-1/
-	if p.eat(css_lexer.TDelimAmpersand) {
+	hasLeadingNestingSelector := p.peek(css_lexer.TDelimAmpersand)
+	if hasLeadingNestingSelector {
+		p.reportUseOfNesting(p.current().Range, opts.isDeclarationContext)
 		sel.HasNestingSelector = true
+		p.advance()
 	}
 
 	// Parse the type selector
+	typeSelectorLoc := p.current().Range.Loc
 	switch p.current().Kind {
 	case css_lexer.TDelimBar, css_lexer.TIdent, css_lexer.TDelimAsterisk:
 		nsName := css_ast.NamespacedName{}
@@ -153,7 +243,7 @@ subclassSelectors:
 					// and ::first-letter) may, for legacy reasons, be represented using
 					// the <pseudo-class-selector> grammar, with only a single ":"
 					// character at their start.
-					if p.options.MinifySyntax && isElement && len(pseudo.Args) == 0 {
+					if p.options.minifySyntax && isElement && len(pseudo.Args) == 0 {
 						switch pseudo.Name {
 						case "before", "after", "first-line", "first-letter":
 							isElement = false
@@ -170,10 +260,8 @@ subclassSelectors:
 
 		case css_lexer.TDelimAmpersand:
 			// This is an extension: https://drafts.csswg.org/css-nesting-1/
-			if !sel.HasNestingSelector {
-				p.maybeWarnAboutNesting(p.current().Range)
-				sel.HasNestingSelector = true
-			}
+			p.reportUseOfNesting(p.current().Range, sel.HasNestingSelector)
+			sel.HasNestingSelector = true
 			p.advance()
 
 		default:
@@ -183,6 +271,46 @@ subclassSelectors:
 
 	// The compound selector must be non-empty
 	if !sel.HasNestingSelector && sel.TypeSelector == nil && len(sel.SubclassSelectors) == 0 {
+		p.unexpected()
+		return
+	}
+
+	// Note: "&div {}" was originally valid, but is now an invalid selector:
+	// https://github.com/w3c/csswg-drafts/issues/8662#issuecomment-1514977935.
+	// This is because SASS already uses that syntax to mean something very
+	// different, so that syntax has been removed to avoid mistakes.
+	if hasLeadingNestingSelector && sel.TypeSelector != nil {
+		r := logger.Range{Loc: typeSelectorLoc, Len: p.at(p.index-1).Range.End() - typeSelectorLoc.Start}
+		text := sel.TypeSelector.Name.Text
+		if sel.TypeSelector.NamespacePrefix != nil {
+			text = fmt.Sprintf("%s|%s", sel.TypeSelector.NamespacePrefix.Text, text)
+		}
+		var howToFix string
+		suggestion := p.source.TextForRange(r)
+		if opts.isFirst {
+			suggestion = fmt.Sprintf(":is(%s)", suggestion)
+			howToFix = "You can wrap this selector in \":is()\" as a workaround. "
+		} else {
+			r = logger.Range{Loc: startLoc, Len: r.End() - startLoc.Start}
+			suggestion += "&"
+			howToFix = "You can move the \"&\" to the end of this selector as a workaround. "
+		}
+		msg := logger.Msg{
+			Kind: logger.Warning,
+			Data: p.tracker.MsgData(r, fmt.Sprintf("Cannot use type selector %q directly after nesting selector \"&\"", text)),
+			Notes: []logger.MsgData{{Text: "CSS nesting syntax does not allow the \"&\" selector to come before a type selector. " +
+				howToFix +
+				"This restriction exists to avoid problems with SASS nesting, where the same syntax means something very different " +
+				"that has no equivalent in real CSS (appending a suffix to the parent selector)."}},
+		}
+		msg.Data.Location.Suggestion = suggestion
+		p.log.AddMsgID(logger.MsgID_CSS_CSSSyntaxError, msg)
+		return
+	}
+
+	// The type selector must always come first
+	switch p.current().Kind {
+	case css_lexer.TDelimBar, css_lexer.TIdent, css_lexer.TDelimAsterisk:
 		p.unexpected()
 		return
 	}
@@ -347,21 +475,21 @@ loop:
 	return tokens
 }
 
-func (p *parser) parseCombinator() string {
+func (p *parser) parseCombinator() uint8 {
 	switch p.current().Kind {
 	case css_lexer.TDelimGreaterThan:
 		p.advance()
-		return ">"
+		return '>'
 
 	case css_lexer.TDelimPlus:
 		p.advance()
-		return "+"
+		return '+'
 
 	case css_lexer.TDelimTilde:
 		p.advance()
-		return "~"
+		return '~'
 
 	default:
-		return ""
+		return 0
 	}
 }

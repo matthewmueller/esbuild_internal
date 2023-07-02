@@ -17,10 +17,12 @@ const (
 	MsgID_JS_AssignToDefine
 	MsgID_JS_AssignToImport
 	MsgID_JS_CallImportNamespace
+	MsgID_JS_ClassNameWillThrow
 	MsgID_JS_CommonJSVariableInESM
 	MsgID_JS_DeleteSuperProperty
 	MsgID_JS_DirectEval
 	MsgID_JS_DuplicateCase
+	MsgID_JS_DuplicateClassMember
 	MsgID_JS_DuplicateObjectKey
 	MsgID_JS_EmptyImportMeta
 	MsgID_JS_EqualsNaN
@@ -32,6 +34,7 @@ const (
 	MsgID_JS_PrivateNameWillThrow
 	MsgID_JS_SemicolonAfterReturn
 	MsgID_JS_SuspiciousBooleanNot
+	MsgID_JS_SuspiciousDefine
 	MsgID_JS_ThisIsUndefinedInESM
 	MsgID_JS_UnsupportedDynamicImport
 	MsgID_JS_UnsupportedJSXComment
@@ -73,15 +76,14 @@ const (
 	MsgID_PackageJSON_LAST // Keep this last
 
 	// tsconfig.json
-	MsgID_TsconfigJSON_FIRST // Keep this first
-	MsgID_TsconfigJSON_Cycle
-	MsgID_TsconfigJSON_InvalidImportsNotUsedAsValues
-	MsgID_TsconfigJSON_InvalidJSX
-	MsgID_TsconfigJSON_InvalidModuleSuffixes
-	MsgID_TsconfigJSON_InvalidPaths
-	MsgID_TsconfigJSON_InvalidTarget
-	MsgID_TsconfigJSON_Missing
-	MsgID_TsconfigJSON_LAST // Keep this last
+	MsgID_TSConfigJSON_FIRST // Keep this first
+	MsgID_TSConfigJSON_Cycle
+	MsgID_TSConfigJSON_InvalidImportsNotUsedAsValues
+	MsgID_TSConfigJSON_InvalidJSX
+	MsgID_TSConfigJSON_InvalidPaths
+	MsgID_TSConfigJSON_InvalidTarget
+	MsgID_TSConfigJSON_Missing
+	MsgID_TSConfigJSON_LAST // Keep this last
 
 	MsgID_END // Keep this at the end (used only for tests)
 )
@@ -99,6 +101,8 @@ func StringToMsgIDs(str string, logLevel LogLevel, overrides map[MsgID]LogLevel)
 		overrides[MsgID_JS_AssignToImport] = logLevel
 	case "call-import-namespace":
 		overrides[MsgID_JS_CallImportNamespace] = logLevel
+	case "class-name-will-throw":
+		overrides[MsgID_JS_ClassNameWillThrow] = logLevel
 	case "commonjs-variable-in-esm":
 		overrides[MsgID_JS_CommonJSVariableInESM] = logLevel
 	case "delete-super-property":
@@ -107,6 +111,8 @@ func StringToMsgIDs(str string, logLevel LogLevel, overrides map[MsgID]LogLevel)
 		overrides[MsgID_JS_DirectEval] = logLevel
 	case "duplicate-case":
 		overrides[MsgID_JS_DuplicateCase] = logLevel
+	case "duplicate-class-member":
+		overrides[MsgID_JS_DuplicateClassMember] = logLevel
 	case "duplicate-object-key":
 		overrides[MsgID_JS_DuplicateObjectKey] = logLevel
 	case "empty-import-meta":
@@ -129,6 +135,8 @@ func StringToMsgIDs(str string, logLevel LogLevel, overrides map[MsgID]LogLevel)
 		overrides[MsgID_JS_SemicolonAfterReturn] = logLevel
 	case "suspicious-boolean-not":
 		overrides[MsgID_JS_SuspiciousBooleanNot] = logLevel
+	case "suspicious-define":
+		overrides[MsgID_JS_SuspiciousDefine] = logLevel
 	case "this-is-undefined-in-esm":
 		overrides[MsgID_JS_ThisIsUndefinedInESM] = logLevel
 	case "unsupported-dynamic-import":
@@ -192,7 +200,7 @@ func StringToMsgIDs(str string, logLevel LogLevel, overrides map[MsgID]LogLevel)
 		}
 
 	case "tsconfig.json":
-		for i := MsgID_TsconfigJSON_FIRST; i <= MsgID_TsconfigJSON_LAST; i++ {
+		for i := MsgID_TSConfigJSON_FIRST; i <= MsgID_TSConfigJSON_LAST; i++ {
 			overrides[i] = logLevel
 		}
 
@@ -215,6 +223,8 @@ func MsgIDToString(id MsgID) string {
 		return "assign-to-import"
 	case MsgID_JS_CallImportNamespace:
 		return "call-import-namespace"
+	case MsgID_JS_ClassNameWillThrow:
+		return "class-name-will-throw"
 	case MsgID_JS_CommonJSVariableInESM:
 		return "commonjs-variable-in-esm"
 	case MsgID_JS_DeleteSuperProperty:
@@ -223,6 +233,8 @@ func MsgIDToString(id MsgID) string {
 		return "direct-eval"
 	case MsgID_JS_DuplicateCase:
 		return "duplicate-case"
+	case MsgID_JS_DuplicateClassMember:
+		return "duplicate-class-member"
 	case MsgID_JS_DuplicateObjectKey:
 		return "duplicate-object-key"
 	case MsgID_JS_EmptyImportMeta:
@@ -245,6 +257,8 @@ func MsgIDToString(id MsgID) string {
 		return "semicolon-after-return"
 	case MsgID_JS_SuspiciousBooleanNot:
 		return "suspicious-boolean-not"
+	case MsgID_JS_SuspiciousDefine:
+		return "suspicious-define"
 	case MsgID_JS_ThisIsUndefinedInESM:
 		return "this-is-undefined-in-esm"
 	case MsgID_JS_UnsupportedDynamicImport:
@@ -306,7 +320,7 @@ func MsgIDToString(id MsgID) string {
 		if id >= MsgID_PackageJSON_FIRST && id <= MsgID_PackageJSON_LAST {
 			return "package.json"
 		}
-		if id >= MsgID_TsconfigJSON_FIRST && id <= MsgID_TsconfigJSON_LAST {
+		if id >= MsgID_TSConfigJSON_FIRST && id <= MsgID_TSConfigJSON_LAST {
 			return "tsconfig.json"
 		}
 	}

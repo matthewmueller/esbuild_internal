@@ -49,6 +49,14 @@ func (e Engine) String() string {
 	return ""
 }
 
+func (e Engine) IsBrowser() bool {
+	switch e {
+	case Chrome, Edge, Firefox, IE, IOS, Opera, Safari:
+		return true
+	}
+	return false
+}
+
 type JSFeature uint64
 
 const (
@@ -70,6 +78,7 @@ const (
 	ClassStaticBlocks
 	ClassStaticField
 	ConstAndLet
+	Decorators
 	DefaultArgument
 	Destructuring
 	DynamicImport
@@ -77,6 +86,7 @@ const (
 	ExportStarAs
 	ForAwait
 	ForOf
+	FunctionOrClassPropertyAccess
 	Generator
 	Hashbang
 	ImportAssertions
@@ -105,62 +115,66 @@ const (
 	TopLevelAwait
 	TypeofExoticObjectIsObject
 	UnicodeEscapes
+	Using
 )
 
 var StringToJSFeature = map[string]JSFeature{
-	"arbitrary-module-namespace-names": ArbitraryModuleNamespaceNames,
-	"array-spread":                     ArraySpread,
-	"arrow":                            Arrow,
-	"async-await":                      AsyncAwait,
-	"async-generator":                  AsyncGenerator,
-	"bigint":                           Bigint,
-	"class":                            Class,
-	"class-field":                      ClassField,
-	"class-private-accessor":           ClassPrivateAccessor,
-	"class-private-brand-check":        ClassPrivateBrandCheck,
-	"class-private-field":              ClassPrivateField,
-	"class-private-method":             ClassPrivateMethod,
-	"class-private-static-accessor":    ClassPrivateStaticAccessor,
-	"class-private-static-field":       ClassPrivateStaticField,
-	"class-private-static-method":      ClassPrivateStaticMethod,
-	"class-static-blocks":              ClassStaticBlocks,
-	"class-static-field":               ClassStaticField,
-	"const-and-let":                    ConstAndLet,
-	"default-argument":                 DefaultArgument,
-	"destructuring":                    Destructuring,
-	"dynamic-import":                   DynamicImport,
-	"exponent-operator":                ExponentOperator,
-	"export-star-as":                   ExportStarAs,
-	"for-await":                        ForAwait,
-	"for-of":                           ForOf,
-	"generator":                        Generator,
-	"hashbang":                         Hashbang,
-	"import-assertions":                ImportAssertions,
-	"import-meta":                      ImportMeta,
-	"inline-script":                    InlineScript,
-	"logical-assignment":               LogicalAssignment,
-	"nested-rest-binding":              NestedRestBinding,
-	"new-target":                       NewTarget,
-	"node-colon-prefix-import":         NodeColonPrefixImport,
-	"node-colon-prefix-require":        NodeColonPrefixRequire,
-	"nullish-coalescing":               NullishCoalescing,
-	"object-accessors":                 ObjectAccessors,
-	"object-extensions":                ObjectExtensions,
-	"object-rest-spread":               ObjectRestSpread,
-	"optional-catch-binding":           OptionalCatchBinding,
-	"optional-chain":                   OptionalChain,
-	"regexp-dot-all-flag":              RegexpDotAllFlag,
-	"regexp-lookbehind-assertions":     RegexpLookbehindAssertions,
-	"regexp-match-indices":             RegexpMatchIndices,
-	"regexp-named-capture-groups":      RegexpNamedCaptureGroups,
-	"regexp-set-notation":              RegexpSetNotation,
-	"regexp-sticky-and-unicode-flags":  RegexpStickyAndUnicodeFlags,
-	"regexp-unicode-property-escapes":  RegexpUnicodePropertyEscapes,
-	"rest-argument":                    RestArgument,
-	"template-literal":                 TemplateLiteral,
-	"top-level-await":                  TopLevelAwait,
-	"typeof-exotic-object-is-object":   TypeofExoticObjectIsObject,
-	"unicode-escapes":                  UnicodeEscapes,
+	"arbitrary-module-namespace-names":  ArbitraryModuleNamespaceNames,
+	"array-spread":                      ArraySpread,
+	"arrow":                             Arrow,
+	"async-await":                       AsyncAwait,
+	"async-generator":                   AsyncGenerator,
+	"bigint":                            Bigint,
+	"class":                             Class,
+	"class-field":                       ClassField,
+	"class-private-accessor":            ClassPrivateAccessor,
+	"class-private-brand-check":         ClassPrivateBrandCheck,
+	"class-private-field":               ClassPrivateField,
+	"class-private-method":              ClassPrivateMethod,
+	"class-private-static-accessor":     ClassPrivateStaticAccessor,
+	"class-private-static-field":        ClassPrivateStaticField,
+	"class-private-static-method":       ClassPrivateStaticMethod,
+	"class-static-blocks":               ClassStaticBlocks,
+	"class-static-field":                ClassStaticField,
+	"const-and-let":                     ConstAndLet,
+	"decorators":                        Decorators,
+	"default-argument":                  DefaultArgument,
+	"destructuring":                     Destructuring,
+	"dynamic-import":                    DynamicImport,
+	"exponent-operator":                 ExponentOperator,
+	"export-star-as":                    ExportStarAs,
+	"for-await":                         ForAwait,
+	"for-of":                            ForOf,
+	"function-or-class-property-access": FunctionOrClassPropertyAccess,
+	"generator":                         Generator,
+	"hashbang":                          Hashbang,
+	"import-assertions":                 ImportAssertions,
+	"import-meta":                       ImportMeta,
+	"inline-script":                     InlineScript,
+	"logical-assignment":                LogicalAssignment,
+	"nested-rest-binding":               NestedRestBinding,
+	"new-target":                        NewTarget,
+	"node-colon-prefix-import":          NodeColonPrefixImport,
+	"node-colon-prefix-require":         NodeColonPrefixRequire,
+	"nullish-coalescing":                NullishCoalescing,
+	"object-accessors":                  ObjectAccessors,
+	"object-extensions":                 ObjectExtensions,
+	"object-rest-spread":                ObjectRestSpread,
+	"optional-catch-binding":            OptionalCatchBinding,
+	"optional-chain":                    OptionalChain,
+	"regexp-dot-all-flag":               RegexpDotAllFlag,
+	"regexp-lookbehind-assertions":      RegexpLookbehindAssertions,
+	"regexp-match-indices":              RegexpMatchIndices,
+	"regexp-named-capture-groups":       RegexpNamedCaptureGroups,
+	"regexp-set-notation":               RegexpSetNotation,
+	"regexp-sticky-and-unicode-flags":   RegexpStickyAndUnicodeFlags,
+	"regexp-unicode-property-escapes":   RegexpUnicodePropertyEscapes,
+	"rest-argument":                     RestArgument,
+	"template-literal":                  TemplateLiteral,
+	"top-level-await":                   TopLevelAwait,
+	"typeof-exotic-object-is-object":    TypeofExoticObjectIsObject,
+	"unicode-escapes":                   UnicodeEscapes,
+	"using":                             Using,
 }
 
 func (features JSFeature) Has(feature JSFeature) bool {
@@ -286,7 +300,7 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Edge:    {{start: v{84, 0, 0}}},
 		ES:      {{start: v{2022, 0, 0}}},
 		Firefox: {{start: v{90, 0, 0}}},
-		IOS:     {{start: v{15, 0, 0}}},
+		IOS:     {{start: v{14, 5, 0}}},
 		Node:    {{start: v{14, 6, 0}}},
 		Opera:   {{start: v{70, 0, 0}}},
 		Safari:  {{start: v{14, 1, 0}}},
@@ -319,7 +333,7 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Edge:    {{start: v{79, 0, 0}}},
 		ES:      {{start: v{2022, 0, 0}}},
 		Firefox: {{start: v{90, 0, 0}}},
-		IOS:     {{start: v{15, 0, 0}}},
+		IOS:     {{start: v{14, 5, 0}}},
 		Node:    {{start: v{12, 0, 0}}},
 		Opera:   {{start: v{62, 0, 0}}},
 		Safari:  {{start: v{14, 1, 0}}},
@@ -349,7 +363,7 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Edge:    {{start: v{79, 0, 0}}},
 		ES:      {{start: v{2022, 0, 0}}},
 		Firefox: {{start: v{75, 0, 0}}},
-		IOS:     {{start: v{15, 0, 0}}},
+		IOS:     {{start: v{14, 5, 0}}},
 		Node:    {{start: v{12, 0, 0}}},
 		Opera:   {{start: v{60, 0, 0}}},
 		Safari:  {{start: v{14, 1, 0}}},
@@ -365,6 +379,7 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Opera:   {{start: v{36, 0, 0}}},
 		Safari:  {{start: v{11, 0, 0}}},
 	},
+	Decorators: {},
 	DefaultArgument: {
 		Chrome:  {{start: v{49, 0, 0}}},
 		Deno:    {{start: v{1, 0, 0}}},
@@ -382,7 +397,6 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Edge:    {{start: v{18, 0, 0}}},
 		ES:      {{start: v{2015, 0, 0}}},
 		Firefox: {{start: v{53, 0, 0}}},
-		Hermes:  {{start: v{0, 7, 0}}},
 		IOS:     {{start: v{10, 0, 0}}},
 		Node:    {{start: v{6, 5, 0}}},
 		Opera:   {{start: v{38, 0, 0}}},
@@ -442,6 +456,20 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Opera:   {{start: v{38, 0, 0}}},
 		Safari:  {{start: v{10, 0, 0}}},
 	},
+	FunctionOrClassPropertyAccess: {
+		Chrome:  {{start: v{0, 0, 0}}},
+		Deno:    {{start: v{0, 0, 0}}},
+		Edge:    {{start: v{0, 0, 0}}},
+		ES:      {{start: v{0, 0, 0}}},
+		Firefox: {{start: v{0, 0, 0}}},
+		Hermes:  {{start: v{0, 0, 0}}},
+		IE:      {{start: v{0, 0, 0}}},
+		IOS:     {{start: v{0, 0, 0}}},
+		Node:    {{start: v{0, 0, 0}}},
+		Opera:   {{start: v{0, 0, 0}}},
+		Rhino:   {{start: v{0, 0, 0}}},
+		Safari:  {{start: v{16, 3, 0}}},
+	},
 	Generator: {
 		Chrome:  {{start: v{50, 0, 0}}},
 		Deno:    {{start: v{1, 0, 0}}},
@@ -458,6 +486,7 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Deno:    {{start: v{1, 0, 0}}},
 		Edge:    {{start: v{79, 0, 0}}},
 		Firefox: {{start: v{67, 0, 0}}},
+		Hermes:  {{start: v{0, 7, 0}}},
 		IOS:     {{start: v{13, 4, 0}}},
 		Node:    {{start: v{12, 5, 0}}},
 		Opera:   {{start: v{62, 0, 0}}},
@@ -588,6 +617,7 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Edge:    {{start: v{91, 0, 0}}},
 		ES:      {{start: v{2020, 0, 0}}},
 		Firefox: {{start: v{74, 0, 0}}},
+		Hermes:  {{start: v{0, 12, 0}}},
 		IOS:     {{start: v{13, 4, 0}}},
 		Node:    {{start: v{16, 1, 0}}},
 		Opera:   {{start: v{77, 0, 0}}},
@@ -693,12 +723,15 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 	},
 	TypeofExoticObjectIsObject: {
 		Chrome:  {{start: v{0, 0, 0}}},
+		Deno:    {{start: v{0, 0, 0}}},
 		Edge:    {{start: v{0, 0, 0}}},
 		ES:      {{start: v{2020, 0, 0}}},
 		Firefox: {{start: v{0, 0, 0}}},
+		Hermes:  {{start: v{0, 0, 0}}},
 		IOS:     {{start: v{0, 0, 0}}},
 		Node:    {{start: v{0, 0, 0}}},
 		Opera:   {{start: v{0, 0, 0}}},
+		Rhino:   {{start: v{0, 0, 0}}},
 		Safari:  {{start: v{0, 0, 0}}},
 	},
 	UnicodeEscapes: {
@@ -713,6 +746,7 @@ var jsTable = map[JSFeature]map[Engine][]versionRange{
 		Opera:   {{start: v{31, 0, 0}}},
 		Safari:  {{start: v{9, 0, 0}}},
 	},
+	Using: {},
 }
 
 // Return all features that are not available in at least one environment

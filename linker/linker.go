@@ -452,28 +452,45 @@ func (c *linkerContext) mangleProps(mangleCache map[string]interface{}) {
 // can cause initialization bugs. So let's forbid these cycles for now to guard
 // against code splitting bugs that could cause us to generate buggy chunks.
 func (c *linkerContext) enforceNoCyclicChunkImports() {
-	var validate func(int, []int)
-	validate = func(chunkIndex int, path []int) {
-		for _, otherChunkIndex := range path {
-			if chunkIndex == otherChunkIndex {
-				c.log.AddError(nil, logger.Range{}, "Internal error: generated chunks contain a circular import")
-				return
-			}
+	var validate func(int, map[int]int) bool
+
+	// DFS memoization with 3-colors, more space efficient
+	// 0: white (unvisited), 1: gray (visiting), 2: black (visited)
+	colors := make(map[int]int)
+	validate = func(chunkIndex int, colors map[int]int) bool {
+		if colors[chunkIndex] == 1 {
+			c.log.AddError(nil, logger.Range{}, "Internal error: generated chunks contain a circular import")
+			return true
 		}
-		path = append(path, chunkIndex)
+
+		if colors[chunkIndex] == 2 {
+			return false
+		}
+
+		colors[chunkIndex] = 1
+
 		for _, chunkImport := range c.chunks[chunkIndex].crossChunkImports {
 			// Ignore cycles caused by dynamic "import()" expressions. These are fine
 			// because they don't necessarily cause initialization order issues and
 			// they don't indicate a bug in our chunk generation algorithm. They arise
 			// normally in real code (e.g. two files that import each other).
 			if chunkImport.importKind != ast.ImportDynamic {
-				validate(int(chunkImport.chunkIndex), path)
+
+				// Recursively validate otherChunkIndex
+				if validate(int(chunkImport.chunkIndex), colors) {
+					return true
+				}
 			}
 		}
+
+		colors[chunkIndex] = 2
+		return false
 	}
-	path := make([]int, 0, len(c.chunks))
+
 	for i := range c.chunks {
-		validate(i, path)
+		if validate(i, colors) {
+			break
+		}
 	}
 }
 
@@ -3820,10 +3837,12 @@ func (c *linkerContext) generateCodeForFileInChunkJS(
 
 	// The top-level directive must come first (the non-wrapped case is handled
 	// by the chunk generation code, although only for the entry point)
-	if repr.AST.Directive != "" && repr.Meta.Wrap != graph.WrapNone && !file.IsEntryPoint() {
-		stmtList.insideWrapperPrefix = append(stmtList.insideWrapperPrefix, js_ast.Stmt{
-			Data: &js_ast.SDirective{Value: helpers.StringToUTF16(repr.AST.Directive)},
-		})
+	if repr.Meta.Wrap != graph.WrapNone && !file.IsEntryPoint() {
+		for _, directive := range repr.AST.Directives {
+			stmtList.insideWrapperPrefix = append(stmtList.insideWrapperPrefix, js_ast.Stmt{
+				Data: &js_ast.SDirective{Value: helpers.StringToUTF16(directive)},
+			})
+		}
 	}
 
 	// Make sure the generated call to "__export(exports, ...)" comes first
@@ -4098,6 +4117,7 @@ func (c *linkerContext) generateCodeForFileInChunkJS(
 		MinifyIdentifiers:            c.options.MinifyIdentifiers,
 		MinifyWhitespace:             c.options.MinifyWhitespace,
 		MinifySyntax:                 c.options.MinifySyntax,
+		LineLimit:                    c.options.LineLimit,
 		ASCIIOnly:                    c.options.ASCIIOnly,
 		ToCommonJSRef:                toCommonJSRef,
 		ToESMRef:                     toESMRef,
@@ -4115,7 +4135,7 @@ func (c *linkerContext) generateCodeForFileInChunkJS(
 		NeedsMetafile:                c.options.NeedsMetafile,
 	}
 	tree := repr.AST
-	tree.Directive = "" // This is handled elsewhere
+	tree.Directives = nil // This is handled elsewhere
 	tree.Parts = []js_ast.Part{{Stmts: stmts}}
 	*result = compileResultJS{
 		PrintResult: js_printer.Print(tree, c.graph.Symbols, r, printOptions),
@@ -4208,7 +4228,7 @@ func (c *linkerContext) generateEntryPointTailJS(
 		// of this parser, which the node project uses to detect named exports in
 		// CommonJS files: https://github.com/guybedford/cjs-module-lexer. Think of
 		// this code as an annotation for that parser.
-		if c.options.Platform == config.PlatformNode && len(repr.Meta.SortedAndFilteredExportAliases) > 0 {
+		if c.options.Platform == config.PlatformNode {
 			// Add a comment since otherwise people will surely wonder what this is.
 			// This annotation means you can do this and have it work:
 			//
@@ -4228,11 +4248,6 @@ func (c *linkerContext) generateEntryPointTailJS(
 			// instead of "__export" but support for that would need to be added to
 			// "cjs-module-lexer" and then we would need to be ok with not supporting
 			// older versions of node that don't have that newly-added support.
-			if !c.options.MinifyWhitespace {
-				stmts = append(stmts,
-					js_ast.Stmt{Data: &js_ast.SComment{Text: `// Annotate the CommonJS export names for ESM import in node:`}},
-				)
-			}
 
 			// "{a, b, if: null}"
 			var moduleExports []js_ast.Property
@@ -4259,20 +4274,38 @@ func (c *linkerContext) generateEntryPointTailJS(
 				})
 			}
 
-			// "0 && (module.exports = {a, b, if: null});"
-			expr := js_ast.Expr{Data: &js_ast.EBinary{
-				Op:   js_ast.BinOpLogicalAnd,
-				Left: js_ast.Expr{Data: &js_ast.ENumber{Value: 0}},
-				Right: js_ast.Assign(
-					js_ast.Expr{Data: &js_ast.EDot{
-						Target: js_ast.Expr{Data: &js_ast.EIdentifier{Ref: c.unboundModuleRef}},
-						Name:   "exports",
-					}},
-					js_ast.Expr{Data: &js_ast.EObject{Properties: moduleExports}},
-				),
-			}}
+			// Add annotations for re-exports: "{...require('./foo')}"
+			for _, importRecordIndex := range repr.AST.ExportStarImportRecords {
+				if record := &repr.AST.ImportRecords[importRecordIndex]; !record.SourceIndex.IsValid() {
+					moduleExports = append(moduleExports, js_ast.Property{
+						Kind:       js_ast.PropertySpread,
+						ValueOrNil: js_ast.Expr{Data: &js_ast.ERequireString{ImportRecordIndex: importRecordIndex}},
+					})
+				}
+			}
 
-			stmts = append(stmts, js_ast.Stmt{Data: &js_ast.SExpr{Value: expr}})
+			if len(moduleExports) > 0 {
+				// "0 && (module.exports = {a, b, if: null});"
+				expr := js_ast.Expr{Data: &js_ast.EBinary{
+					Op:   js_ast.BinOpLogicalAnd,
+					Left: js_ast.Expr{Data: &js_ast.ENumber{Value: 0}},
+					Right: js_ast.Assign(
+						js_ast.Expr{Data: &js_ast.EDot{
+							Target: js_ast.Expr{Data: &js_ast.EIdentifier{Ref: c.unboundModuleRef}},
+							Name:   "exports",
+						}},
+						js_ast.Expr{Data: &js_ast.EObject{Properties: moduleExports}},
+					),
+				}}
+
+				if !c.options.MinifyWhitespace {
+					stmts = append(stmts,
+						js_ast.Stmt{Data: &js_ast.SComment{Text: `// Annotate the CommonJS export names for ESM import in node:`}},
+					)
+				}
+
+				stmts = append(stmts, js_ast.Stmt{Data: &js_ast.SExpr{Value: expr}})
+			}
 		}
 
 	case config.FormatESModule:
@@ -4411,7 +4444,7 @@ func (c *linkerContext) generateEntryPointTailJS(
 	}
 
 	tree := repr.AST
-	tree.Directive = ""
+	tree.Directives = nil
 	tree.Parts = []js_ast.Part{{Stmts: stmts}}
 
 	// Indent the file if everything is wrapped in an IIFE
@@ -4427,6 +4460,7 @@ func (c *linkerContext) generateEntryPointTailJS(
 		MinifyIdentifiers:            c.options.MinifyIdentifiers,
 		MinifyWhitespace:             c.options.MinifyWhitespace,
 		MinifySyntax:                 c.options.MinifySyntax,
+		LineLimit:                    c.options.LineLimit,
 		ASCIIOnly:                    c.options.ASCIIOnly,
 		ToCommonJSRef:                toCommonJSRef,
 		ToESMRef:                     toESMRef,
@@ -4748,6 +4782,7 @@ func (c *linkerContext) generateChunkJS(chunkIndex int, chunkWaitGroup *sync.Wai
 			MinifyIdentifiers: c.options.MinifyIdentifiers,
 			MinifyWhitespace:  c.options.MinifyWhitespace,
 			MinifySyntax:      c.options.MinifySyntax,
+			LineLimit:         c.options.LineLimit,
 			NeedsMetafile:     c.options.NeedsMetafile,
 		}
 		crossChunkImportRecords := make([]ast.ImportRecord, len(chunk.crossChunkImports))
@@ -4824,12 +4859,14 @@ func (c *linkerContext) generateChunkJS(chunkIndex int, chunkWaitGroup *sync.Wai
 	// Add the top-level directive if present (but omit "use strict" in ES
 	// modules because all ES modules are automatically in strict mode)
 	if chunk.isEntryPoint {
-		if repr := c.graph.Files[chunk.sourceIndex].InputFile.Repr.(*graph.JSRepr); repr.AST.Directive != "" &&
-			(repr.AST.Directive != "use strict" || c.options.OutputFormat != config.FormatESModule) {
-			quoted := string(helpers.QuoteForJSON(repr.AST.Directive, c.options.ASCIIOnly)) + ";" + newline
-			prevOffset.AdvanceString(quoted)
-			j.AddString(quoted)
-			newlineBeforeComment = true
+		repr := c.graph.Files[chunk.sourceIndex].InputFile.Repr.(*graph.JSRepr)
+		for _, directive := range repr.AST.Directives {
+			if directive != "use strict" || c.options.OutputFormat != config.FormatESModule {
+				quoted := string(helpers.QuoteForJSON(directive, c.options.ASCIIOnly)) + ";" + newline
+				prevOffset.AdvanceString(quoted)
+				j.AddString(quoted)
+				newlineBeforeComment = true
+			}
 		}
 	}
 
@@ -5256,6 +5293,7 @@ func (c *linkerContext) generateChunkCSS(chunkIndex int, chunkWaitGroup *sync.Wa
 
 			cssOptions := css_printer.Options{
 				MinifyWhitespace:    c.options.MinifyWhitespace,
+				LineLimit:           c.options.LineLimit,
 				ASCIIOnly:           c.options.ASCIIOnly,
 				LegalComments:       c.options.LegalComments,
 				SourceMap:           c.options.SourceMap,
@@ -5317,6 +5355,7 @@ func (c *linkerContext) generateChunkCSS(chunkIndex int, chunkWaitGroup *sync.Wa
 		if len(tree.Rules) > 0 {
 			result := css_printer.Print(tree, css_printer.Options{
 				MinifyWhitespace: c.options.MinifyWhitespace,
+				LineLimit:        c.options.LineLimit,
 				ASCIIOnly:        c.options.ASCIIOnly,
 				NeedsMetafile:    c.options.NeedsMetafile,
 			})
@@ -5832,28 +5871,6 @@ func hashWriteLengthPrefixed(hash hash.Hash, bytes []byte) {
 	hash.Write(bytes)
 }
 
-func preventBindingsFromBeingRenamed(binding js_ast.Binding, symbols js_ast.SymbolMap) {
-	switch b := binding.Data.(type) {
-	case *js_ast.BMissing:
-
-	case *js_ast.BIdentifier:
-		symbols.Get(b.Ref).Flags |= js_ast.MustNotBeRenamed
-
-	case *js_ast.BArray:
-		for _, i := range b.Items {
-			preventBindingsFromBeingRenamed(i.Binding, symbols)
-		}
-
-	case *js_ast.BObject:
-		for _, p := range b.Properties {
-			preventBindingsFromBeingRenamed(p.Value, symbols)
-		}
-
-	default:
-		panic(fmt.Sprintf("Unexpected binding of type %T", binding.Data))
-	}
-}
-
 // Marking a symbol as unbound prevents it from being renamed or minified.
 // This is only used when a module is compiled independently. We use a very
 // different way of handling exports and renaming/minifying when bundling.
@@ -5882,9 +5899,9 @@ func (c *linkerContext) preventExportsFromBeingRenamed(sourceIndex uint32) {
 
 			case *js_ast.SLocal:
 				if s.IsExport {
-					for _, decl := range s.Decls {
-						preventBindingsFromBeingRenamed(decl.Binding, c.graph.Symbols)
-					}
+					js_ast.ForEachIdentifierBindingInDecls(s.Decls, func(loc logger.Loc, b *js_ast.BIdentifier) {
+						c.graph.Symbols.Get(b.Ref).Flags |= js_ast.MustNotBeRenamed
+					})
 					hasImportOrExport = true
 				}
 

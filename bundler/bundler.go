@@ -230,12 +230,7 @@ func parseFile(args parseArgs) {
 		result.ok = ok
 
 	case config.LoaderCSS:
-		ast := args.caches.CSSCache.Parse(args.log, source, css_parser.Options{
-			MinifySyntax:           args.options.MinifySyntax,
-			MinifyWhitespace:       args.options.MinifyWhitespace,
-			UnsupportedCSSFeatures: args.options.UnsupportedCSSFeatures,
-			OriginalTargetEnv:      args.options.OriginalTargetEnv,
-		})
+		ast := args.caches.CSSCache.Parse(args.log, source, css_parser.OptionsFromConfig(&args.options))
 		result.file.inputFile.Repr = &graph.CSSRepr{AST: ast}
 		result.ok = true
 
@@ -480,23 +475,33 @@ func parseFile(args parseArgs) {
 						}
 					}
 
-					// If "sourcesContent" isn't present, try filling it in using the file system
-					if sourceMap != nil && sourceMap.SourcesContent == nil && !args.options.ExcludeSourcesContent {
-						for _, source := range sourceMap.Sources {
-							var absPath string
-							if args.fs.IsAbs(source) {
-								absPath = source
-							} else if path.Namespace == "file" {
-								absPath = args.fs.Join(args.fs.Dir(path.Text), source)
-							} else {
-								sourceMap.SourcesContent = append(sourceMap.SourcesContent, sourcemap.SourceContent{})
-								continue
+					// If "sourcesContent" entries aren't present, try filling them in
+					// using the file system. This includes both generating the entire
+					// "sourcesContent" array if it's absent as well as filling in
+					// individual null entries in the array if the array is present.
+					if sourceMap != nil && !args.options.ExcludeSourcesContent {
+						// Make sure "sourcesContent" is big enough
+						if len(sourceMap.SourcesContent) < len(sourceMap.Sources) {
+							slice := make([]sourcemap.SourceContent, len(sourceMap.Sources))
+							copy(slice, sourceMap.SourcesContent)
+							sourceMap.SourcesContent = slice
+						}
+
+						// Attempt to fill in null entries using the file system
+						for i, source := range sourceMap.Sources {
+							if sourceMap.SourcesContent[i].Value == nil {
+								var absPath string
+								if args.fs.IsAbs(source) {
+									absPath = source
+								} else if path.Namespace == "file" {
+									absPath = args.fs.Join(args.fs.Dir(path.Text), source)
+								} else {
+									continue
+								}
+								if contents, err, _ := args.caches.FSCache.ReadFile(args.fs, absPath); err == nil {
+									sourceMap.SourcesContent[i].Value = helpers.StringToUTF16(contents)
+								}
 							}
-							var sourceContent sourcemap.SourceContent
-							if contents, err, _ := args.caches.FSCache.ReadFile(args.fs, absPath); err == nil {
-								sourceContent.Value = helpers.StringToUTF16(contents)
-							}
-							sourceMap.SourcesContent = append(sourceMap.SourcesContent, sourceContent)
 						}
 					}
 
@@ -530,9 +535,17 @@ func parseFile(args parseArgs) {
 		// "options" object to populate the "InjectedFiles" field. So we must
 		// only send on the "inject" channel after we're done using the "options"
 		// object so we don't introduce a data race.
+		isCopyLoader := loader == config.LoaderCopy
+		if isCopyLoader && args.skipResolve {
+			// This is not allowed because the import path would have to be rewritten,
+			// but import paths are not rewritten when bundling isn't enabled.
+			args.log.AddError(nil, logger.Range{},
+				fmt.Sprintf("Cannot inject %q with the \"copy\" loader without bundling enabled", source.PrettyPath))
+		}
 		args.inject <- config.InjectedFile{
-			Source:  source,
-			Exports: exports,
+			Source:       source,
+			Exports:      exports,
+			IsCopyLoader: isCopyLoader,
 		}
 	}
 
@@ -1098,6 +1111,7 @@ func generateUniqueKeyPrefix() (string, error) {
 // in the plugin API). Each unique module identifier is loaded once (i.e.
 // "onLoad" in the plugin API).
 func ScanBundle(
+	call config.APICall,
 	log logger.Log,
 	fs fs.FS,
 	caches *cache.CacheSet,
@@ -1133,10 +1147,13 @@ func ScanBundle(
 		log.AddError(nil, logger.Range{}, fmt.Sprintf("Failed to read from randomness source: %s", err.Error()))
 	}
 
+	// This may mutate "options" by the "tsconfig.json" override settings
+	res := resolver.NewResolver(call, fs, log, caches, &options)
+
 	s := scanner{
 		log:             log,
 		fs:              fs,
-		res:             resolver.NewResolver(fs, log, caches, options),
+		res:             res,
 		caches:          caches,
 		options:         options,
 		timer:           timer,
@@ -1282,27 +1299,10 @@ func (s *scanner) maybeParseFile(
 		optionsClone.Stdin = nil
 	}
 
-	// Allow certain properties to be overridden
-	if len(resolveResult.JSXFactory) > 0 {
-		optionsClone.JSX.Factory = config.DefineExpr{Parts: resolveResult.JSXFactory}
-	}
-	if len(resolveResult.JSXFragment) > 0 {
-		optionsClone.JSX.Fragment = config.DefineExpr{Parts: resolveResult.JSXFragment}
-	}
-	if resolveResult.JSX != config.TSJSXNone {
-		optionsClone.JSX.SetOptionsFromTSJSX(resolveResult.JSX)
-	}
-	if resolveResult.JSXImportSource != "" {
-		optionsClone.JSX.ImportSource = resolveResult.JSXImportSource
-	}
-	if resolveResult.UseDefineForClassFieldsTS != config.Unspecified {
-		optionsClone.UseDefineForClassFields = resolveResult.UseDefineForClassFieldsTS
-	}
-	if resolveResult.UnusedImportFlagsTS != 0 {
-		optionsClone.UnusedImportFlagsTS = resolveResult.UnusedImportFlagsTS
-	}
-	if resolveResult.TSTarget != nil {
-		optionsClone.TSTarget = resolveResult.TSTarget
+	// Allow certain properties to be overridden by "tsconfig.json"
+	resolveResult.TSConfigJSX.ApplyTo(&optionsClone.JSX)
+	if resolveResult.TSConfig != nil {
+		optionsClone.TS.Config = *resolveResult.TSConfig
 	}
 	if resolveResult.TSAlwaysStrict != nil {
 		optionsClone.TSAlwaysStrict = resolveResult.TSAlwaysStrict
@@ -2095,9 +2095,9 @@ func (s *scanner) processScannedFiles(entryPointMeta []graph.EntryPoint) []scann
 							} else {
 								var text string
 								if data.IsSideEffectsArrayInJSON {
-									text = "It was excluded from the \"sideEffects\" array in the enclosing \"package.json\" file"
+									text = "It was excluded from the \"sideEffects\" array in the enclosing \"package.json\" file:"
 								} else {
-									text = "\"sideEffects\" is false in the enclosing \"package.json\" file"
+									text = "\"sideEffects\" is false in the enclosing \"package.json\" file:"
 								}
 								tracker := logger.MakeLineColumnTracker(data.Source)
 								notes = append(notes, tracker.MsgData(data.Range, text))

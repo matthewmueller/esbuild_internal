@@ -127,8 +127,10 @@ TestTSAbstractClassFieldUseAssign
 ---------- /out.js ----------
 const keepThis = Symbol("keepThis");
 class Foo {
+  static {
+    keepThis;
+  }
 }
-keepThis;
 (() => new Foo())();
 
 ================================================================================
@@ -156,8 +158,10 @@ class Foo {
     this[_a] = s;
     this[_c] = z;
   }
+  static {
+    q, _a = r, _b = x, _c = y;
+  }
 }
-q, _a = r, _b = x, _c = y;
 __decorateClass([
   dec
 ], Foo.prototype, _b, 2);
@@ -195,8 +199,10 @@ class Foo {
     __publicField(this, _c);
     __publicField(this, _d, z);
   }
+  static {
+    _a = q, _b = r, _c = x, _d = y;
+  }
 }
-_a = q, _b = r, _c = x, _d = y;
 __decorateClass([
   dec
 ], Foo.prototype, _c, 2);
@@ -231,21 +237,22 @@ TestTSDeclareClassFields
 ---------- /out.js ----------
 // define-false/index.ts
 var Foo = class {
+  static {
+    () => null, c, () => null, C;
+  }
 };
-() => null, c, () => null, C;
 (() => new Foo())();
 
 // define-true/index.ts
-var _a, _b;
+var _a;
 var Bar = class {
   constructor() {
     __publicField(this, "a");
     __publicField(this, _a);
   }
+  static A;
+  static [(_a = (() => null, c), () => null, C)];
 };
-_a = (() => null, c), _b = (() => null, C);
-__publicField(Bar, "A");
-__publicField(Bar, _b);
 (() => new Bar())();
 
 ================================================================================
@@ -335,6 +342,27 @@ console.log([
   "xyz" /* explicit_string */,
   a.non_constant
 ]);
+
+================================================================================
+TestTSEnumCrossModuleInliningMinifyIndexIntoDot
+---------- /out.js ----------
+// entry.ts
+inlined = [
+  obj.abc,
+  obj.xyz,
+  obj?.abc,
+  obj?.xyz,
+  obj?.prop.abc,
+  obj?.prop.xyz
+];
+notInlined = [
+  obj["a b c" /* foo2 */],
+  obj["x y z" /* bar2 */],
+  obj?.["a b c" /* foo2 */],
+  obj?.["x y z" /* bar2 */],
+  obj?.prop["a b c" /* foo2 */],
+  obj?.prop["x y z" /* bar2 */]
+];
 
 ================================================================================
 TestTSEnumCrossModuleInliningReExport
@@ -568,6 +596,631 @@ export {
 };
 
 ================================================================================
+TestTSExperimentalDecoratorScopeIssue2147
+---------- /out.js ----------
+let foo = 1;
+class Foo {
+  method1(foo2 = 2) {
+  }
+  method2(foo2 = 3) {
+  }
+}
+__decorateClass([
+  __decorateParam(0, dec(foo))
+], Foo.prototype, "method1", 1);
+__decorateClass([
+  __decorateParam(0, dec(() => foo))
+], Foo.prototype, "method2", 1);
+class Bar {
+  static {
+    this.x = class {
+      static {
+        this.y = () => {
+          let bar = 1;
+          let Baz = class {
+            method1() {
+            }
+            method2() {
+            }
+            method3(bar2) {
+            }
+            method4(bar2) {
+            }
+          };
+          __decorateClass([
+            dec(bar)
+          ], Baz.prototype, "method1", 1);
+          __decorateClass([
+            dec(() => bar)
+          ], Baz.prototype, "method2", 1);
+          __decorateClass([
+            __decorateParam(0, dec(() => bar))
+          ], Baz.prototype, "method3", 1);
+          __decorateClass([
+            __decorateParam(0, dec(() => bar))
+          ], Baz.prototype, "method4", 1);
+          Baz = __decorateClass([
+            dec(bar),
+            dec(() => bar)
+          ], Baz);
+          return Baz;
+        };
+      }
+    };
+  }
+}
+
+================================================================================
+TestTSExperimentalDecorators
+---------- /out.js ----------
+// all.ts
+var Foo = class {
+  constructor(arg0, arg1) {
+    this.mDef = 1;
+  }
+  method(arg0, arg1) {
+    return new Foo();
+  }
+  static sMethod(arg0, arg1) {
+    return new Foo();
+  }
+};
+Foo.sDef = new Foo();
+__decorateClass([
+  x,
+  y
+], Foo.prototype, "mUndef", 2);
+__decorateClass([
+  x,
+  y
+], Foo.prototype, "mDef", 2);
+__decorateClass([
+  x,
+  y,
+  __decorateParam(0, x0),
+  __decorateParam(0, y0),
+  __decorateParam(1, x1),
+  __decorateParam(1, y1)
+], Foo.prototype, "method", 1);
+__decorateClass([
+  x,
+  y
+], Foo.prototype, "mDecl", 2);
+__decorateClass([
+  x,
+  y
+], Foo, "sUndef", 2);
+__decorateClass([
+  x,
+  y
+], Foo, "sDef", 2);
+__decorateClass([
+  x,
+  y,
+  __decorateParam(0, x0),
+  __decorateParam(0, y0),
+  __decorateParam(1, x1),
+  __decorateParam(1, y1)
+], Foo, "sMethod", 1);
+__decorateClass([
+  x,
+  y
+], Foo, "mDecl", 2);
+Foo = __decorateClass([
+  x.y(),
+  new y.x(),
+  __decorateParam(0, x0),
+  __decorateParam(0, y0),
+  __decorateParam(1, x1),
+  __decorateParam(1, y1)
+], Foo);
+
+// all_computed.ts
+var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+var Foo2 = class {
+  constructor() {
+    this[_b] = 1;
+    this[_e] = 2;
+  }
+  static {
+    _j = mDecl();
+  }
+  [(_a = mUndef(), _b = mDef(), _c = method())](arg0, arg1) {
+    return new Foo2();
+  }
+  static [(_d = mDecl(), xUndef(), _e = xDef(), yUndef(), _f = yDef(), _g = sUndef(), _h = sDef(), _i = sMethod())](arg0, arg1) {
+    return new Foo2();
+  }
+};
+Foo2[_f] = 3;
+Foo2[_h] = new Foo2();
+__decorateClass([
+  x,
+  y
+], Foo2.prototype, _a, 2);
+__decorateClass([
+  x,
+  y
+], Foo2.prototype, _b, 2);
+__decorateClass([
+  x,
+  y,
+  __decorateParam(0, x0),
+  __decorateParam(0, y0),
+  __decorateParam(1, x1),
+  __decorateParam(1, y1)
+], Foo2.prototype, _c, 1);
+__decorateClass([
+  x,
+  y
+], Foo2.prototype, _d, 2);
+__decorateClass([
+  x,
+  y
+], Foo2, _g, 2);
+__decorateClass([
+  x,
+  y
+], Foo2, _h, 2);
+__decorateClass([
+  x,
+  y,
+  __decorateParam(0, x0),
+  __decorateParam(0, y0),
+  __decorateParam(1, x1),
+  __decorateParam(1, y1)
+], Foo2, _i, 1);
+__decorateClass([
+  x,
+  y
+], Foo2, _j, 2);
+Foo2 = __decorateClass([
+  x?.[_ + "y"](),
+  new y?.[_ + "x"]()
+], Foo2);
+
+// a.ts
+var a_class = class {
+  fn() {
+    return new a_class();
+  }
+};
+a_class.z = new a_class();
+a_class = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], a_class);
+var a = a_class;
+
+// b.ts
+var b_class = class {
+  fn() {
+    return new b_class();
+  }
+};
+b_class.z = new b_class();
+b_class = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], b_class);
+var b = b_class;
+
+// c.ts
+var c = class {
+  fn() {
+    return new c();
+  }
+};
+c.z = new c();
+c = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], c);
+
+// d.ts
+var d = class {
+  fn() {
+    return new d();
+  }
+};
+d.z = new d();
+d = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], d);
+
+// e.ts
+var e_default = class {
+};
+e_default = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], e_default);
+
+// f.ts
+var f = class {
+  fn() {
+    return new f();
+  }
+};
+f.z = new f();
+f = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], f);
+
+// g.ts
+var g_default = class {
+};
+g_default = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], g_default);
+
+// h.ts
+var h = class {
+  fn() {
+    return new h();
+  }
+};
+h.z = new h();
+h = __decorateClass([
+  x(() => 0),
+  y(() => 1)
+], h);
+
+// i.ts
+var i_class = class {
+};
+__decorateClass([
+  x(() => 0),
+  y(() => 1)
+], i_class.prototype, "foo", 2);
+var i = i_class;
+
+// j.ts
+var j = class {
+  foo() {
+  }
+};
+__decorateClass([
+  x(() => 0),
+  y(() => 1)
+], j.prototype, "foo", 1);
+
+// k.ts
+var k_default = class {
+  foo(x2) {
+  }
+};
+__decorateClass([
+  __decorateParam(0, x(() => 0)),
+  __decorateParam(0, y(() => 1))
+], k_default.prototype, "foo", 1);
+
+// arguments.ts
+function dec(x2) {
+}
+function fn(x2) {
+  var _a2;
+  class Foo3 {
+    [_a2 = arguments[0]]() {
+    }
+  }
+  __decorateClass([
+    dec(arguments[0])
+  ], Foo3.prototype, _a2, 1);
+  return Foo3;
+}
+
+// entry.js
+console.log(Foo, Foo2, a, b, c, d, e_default, f, g_default, h, i, j, k_default, fn);
+
+================================================================================
+TestTSExperimentalDecoratorsKeepNames
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+};
+__name(Foo, "Foo");
+Foo = __decorateClass([
+  decoratorMustComeAfterName
+], Foo);
+export {
+  Foo
+};
+
+================================================================================
+TestTSExperimentalDecoratorsManglePropsAssignSemantics
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+  constructor() {
+    this.prop1 = null;
+    this.a = null;
+    this["prop3"] = null;
+    this["prop4_"] = null;
+    this[/* @__KEY__ */ "prop5"] = null;
+    this.b = null;
+  }
+};
+__decorateClass([
+  dec(1)
+], Foo.prototype, "prop1", 2);
+__decorateClass([
+  dec(2)
+], Foo.prototype, "a", 2);
+__decorateClass([
+  dec(3)
+], Foo.prototype, "prop3", 2);
+__decorateClass([
+  dec(4)
+], Foo.prototype, "prop4_", 2);
+__decorateClass([
+  dec(5)
+], Foo.prototype, /* @__KEY__ */ "prop5", 2);
+__decorateClass([
+  dec(6)
+], Foo.prototype, /* @__KEY__ */ "b", 2);
+
+================================================================================
+TestTSExperimentalDecoratorsManglePropsDefineSemantics
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+  prop1 = null;
+  a = null;
+  ["prop3"] = null;
+  ["prop4_"] = null;
+  [/* @__KEY__ */ "prop5"] = null;
+  [/* @__KEY__ */ "b"] = null;
+};
+__decorateClass([
+  dec(1)
+], Foo.prototype, "prop1", 2);
+__decorateClass([
+  dec(2)
+], Foo.prototype, "a", 2);
+__decorateClass([
+  dec(3)
+], Foo.prototype, "prop3", 2);
+__decorateClass([
+  dec(4)
+], Foo.prototype, "prop4_", 2);
+__decorateClass([
+  dec(5)
+], Foo.prototype, /* @__KEY__ */ "prop5", 2);
+__decorateClass([
+  dec(6)
+], Foo.prototype, /* @__KEY__ */ "b", 2);
+
+================================================================================
+TestTSExperimentalDecoratorsManglePropsMethods
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+  prop1() {
+  }
+  a() {
+  }
+  ["prop3"]() {
+  }
+  ["prop4_"]() {
+  }
+  [/* @__KEY__ */ "prop5"]() {
+  }
+  [/* @__KEY__ */ "b"]() {
+  }
+};
+__decorateClass([
+  dec(1)
+], Foo.prototype, "prop1", 1);
+__decorateClass([
+  dec(2)
+], Foo.prototype, "a", 1);
+__decorateClass([
+  dec(3)
+], Foo.prototype, "prop3", 1);
+__decorateClass([
+  dec(4)
+], Foo.prototype, "prop4_", 1);
+__decorateClass([
+  dec(5)
+], Foo.prototype, /* @__KEY__ */ "prop5", 1);
+__decorateClass([
+  dec(6)
+], Foo.prototype, /* @__KEY__ */ "b", 1);
+
+================================================================================
+TestTSExperimentalDecoratorsManglePropsStaticAssignSemantics
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+  static {
+    this.prop1 = null;
+  }
+  static {
+    this.a = null;
+  }
+  static {
+    this["prop3"] = null;
+  }
+  static {
+    this["prop4_"] = null;
+  }
+  static {
+    this[/* @__KEY__ */ "prop5"] = null;
+  }
+  static {
+    this.b = null;
+  }
+};
+__decorateClass([
+  dec(1)
+], Foo, "prop1", 2);
+__decorateClass([
+  dec(2)
+], Foo, "a", 2);
+__decorateClass([
+  dec(3)
+], Foo, "prop3", 2);
+__decorateClass([
+  dec(4)
+], Foo, "prop4_", 2);
+__decorateClass([
+  dec(5)
+], Foo, /* @__KEY__ */ "prop5", 2);
+__decorateClass([
+  dec(6)
+], Foo, /* @__KEY__ */ "b", 2);
+
+================================================================================
+TestTSExperimentalDecoratorsManglePropsStaticDefineSemantics
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+  static prop1 = null;
+  static a = null;
+  static ["prop3"] = null;
+  static ["prop4_"] = null;
+  static [/* @__KEY__ */ "prop5"] = null;
+  static [/* @__KEY__ */ "b"] = null;
+};
+__decorateClass([
+  dec(1)
+], Foo, "prop1", 2);
+__decorateClass([
+  dec(2)
+], Foo, "a", 2);
+__decorateClass([
+  dec(3)
+], Foo, "prop3", 2);
+__decorateClass([
+  dec(4)
+], Foo, "prop4_", 2);
+__decorateClass([
+  dec(5)
+], Foo, /* @__KEY__ */ "prop5", 2);
+__decorateClass([
+  dec(6)
+], Foo, /* @__KEY__ */ "b", 2);
+
+================================================================================
+TestTSExperimentalDecoratorsManglePropsStaticMethods
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+  static prop1() {
+  }
+  static a() {
+  }
+  static ["prop3"]() {
+  }
+  static ["prop4_"]() {
+  }
+  static [/* @__KEY__ */ "prop5"]() {
+  }
+  static [/* @__KEY__ */ "b"]() {
+  }
+};
+__decorateClass([
+  dec(1)
+], Foo, "prop1", 1);
+__decorateClass([
+  dec(2)
+], Foo, "a", 1);
+__decorateClass([
+  dec(3)
+], Foo, "prop3", 1);
+__decorateClass([
+  dec(4)
+], Foo, "prop4_", 1);
+__decorateClass([
+  dec(5)
+], Foo, /* @__KEY__ */ "prop5", 1);
+__decorateClass([
+  dec(6)
+], Foo, /* @__KEY__ */ "b", 1);
+
+================================================================================
+TestTSExperimentalDecoratorsNoConfig
+---------- /out.js ----------
+// entry.ts
+var Foo = @x.y() @(new y.x()) class _Foo {
+  @x
+  @y
+  mUndef;
+  @x
+  @y
+  mDef = 1;
+  @x
+  @y
+  method() {
+    return new _Foo();
+  }
+  @x
+  @y
+  accessor aUndef;
+  @x
+  @y
+  accessor aDef = 1;
+  @x
+  @y
+  static sUndef;
+  @x
+  @y
+  static sDef = new _Foo();
+  @x
+  @y
+  static sMethod() {
+    return new _Foo();
+  }
+  @x
+  @y
+  static accessor asUndef;
+  @x
+  @y
+  static accessor asDef = 1;
+  @x
+  @y
+  #mUndef;
+  @x
+  @y
+  #mDef = 1;
+  @x
+  @y
+  #method() {
+    return new _Foo();
+  }
+  @x
+  @y
+  accessor #aUndef;
+  @x
+  @y
+  accessor #aDef = 1;
+  @x
+  @y
+  static #sUndef;
+  @x
+  @y
+  static #sDef = 1;
+  @x
+  @y
+  static #sMethod() {
+    return new _Foo();
+  }
+  @x
+  @y
+  static accessor #asUndef;
+  @x
+  @y
+  static accessor #asDef = 1;
+};
+export {
+  Foo as default
+};
+
+================================================================================
 TestTSExportDefaultTypeIssue316
 ---------- /out.js ----------
 // keep/declare-class.ts
@@ -579,10 +1232,11 @@ var declare_let_default = foo;
 var bar2 = 123;
 
 // keep/interface-merged.ts
-var _foo = class {
+var foo2 = class _foo {
+  static {
+    this.x = new _foo();
+  }
 };
-var foo2 = _foo;
-foo2.x = new _foo();
 var interface_merged_default = foo2;
 var bar3 = 123;
 
@@ -855,6 +1509,60 @@ var Foo=(e=>(e[e.A=0]="A",e[e.B=1]="B",e[e.C=e]="C",e))(Foo||{});
 export var Foo=(e=>(e[e.X=0]="X",e[e.Y=1]="Y",e[e.Z=e]="Z",e))(Foo||{});
 
 ================================================================================
+TestTSMinifyEnumPropertyNames
+---------- /out.js ----------
+// entry.ts
+var Foo = class {
+  100 = 100;
+  200 = 200;
+  300 = 300;
+  "str 1" = "str 1" /* STR */;
+  123 = 123 /* NUM */;
+  "str 2" = "str 2" /* STR */;
+  321 = 321 /* NUM */;
+};
+shouldNotBeComputed(
+  class {
+    100 = 100;
+    200 = 200;
+    300 = 300;
+    "str 1" = "str 1" /* STR */;
+    123 = 123 /* NUM */;
+    "str 2" = "str 2" /* STR */;
+    321 = 321 /* NUM */;
+  },
+  {
+    100: 100,
+    200: 200,
+    300: 300,
+    "str 1": "str 1" /* STR */,
+    123: 123 /* NUM */,
+    "str 2": "str 2" /* STR */,
+    321: 321 /* NUM */
+  }
+);
+mustBeComputed(
+  { ["__proto__"]: null },
+  { ["__proto__"]: null },
+  class {
+    ["constructor"]() {
+    }
+  },
+  class {
+    ["constructor"]() {
+    }
+  },
+  class {
+    static ["prototype"]() {
+    }
+  },
+  class {
+    static ["prototype"]() {
+    }
+  }
+);
+
+================================================================================
 TestTSMinifyNamespace
 ---------- /a.js ----------
 var Foo;(e=>{let a;(p=>foo(e,p))(a=e.Bar||={})})(Foo||={});
@@ -901,6 +1609,60 @@ function foo(){let u;return(n=>(n[n.A=0]="A",n[n.B=1]="B",n[n.C=n]="C"))(u||(u={
 
 ---------- /b.js ----------
 export function foo(){let e;return(n=>(n[n.X=0]="X",n[n.Y=1]="Y",n[n.Z=n]="Z"))(e||(e={})),e}
+
+================================================================================
+TestTSNamespaceKeepNames
+---------- /out.js ----------
+// entry.ts
+var ns;
+((ns2) => {
+  ns2.foo = /* @__PURE__ */ __name(() => {
+  }, "foo");
+  function bar() {
+  }
+  ns2.bar = bar;
+  __name(bar, "bar");
+  class Baz {
+    static {
+      __name(this, "Baz");
+    }
+  }
+  ns2.Baz = Baz;
+})(ns || (ns = {}));
+
+================================================================================
+TestTSNamespaceKeepNamesTargetES2015
+---------- /out.js ----------
+// entry.ts
+var ns;
+((ns2) => {
+  ns2.foo = /* @__PURE__ */ __name(() => {
+  }, "foo");
+  function bar() {
+  }
+  ns2.bar = bar;
+  __name(bar, "bar");
+  const _Baz = class _Baz {
+  };
+  __name(_Baz, "Baz");
+  let Baz = _Baz;
+  ns2.Baz = _Baz;
+})(ns || (ns = {}));
+
+================================================================================
+TestTSPreferJSOverTSInsideNodeModules
+---------- /out/main.js ----------
+// Users/user/project/src/relative/path.ts
+console.log("success");
+
+// Users/user/project/node_modules/package/path.js
+console.log("success");
+
+// Users/user/project/src/relative2/path.js
+console.log("success");
+
+// Users/user/project/node_modules/package2/path.js
+console.log("success");
 
 ================================================================================
 TestTSSiblingEnum
@@ -1132,9 +1894,12 @@ var objFoo = {
     console.log(this);
   }
 };
-var _Foo = class {
+var Foo = class {
   constructor() {
     this.x = this;
+  }
+  static {
+    this.y = this.z;
   }
   foo(x = this) {
     console.log(this);
@@ -1143,8 +1908,6 @@ var _Foo = class {
     console.log(this);
   }
 };
-var Foo = _Foo;
-Foo.y = _Foo.z;
 new Foo(foo(objFoo));
 if (nested) {
   let bar = function(x = this) {
@@ -1156,9 +1919,12 @@ if (nested) {
       console.log(this);
     }
   };
-  const _Bar = class {
+  class Bar {
     constructor() {
       this.x = this;
+    }
+    static {
+      this.y = this.z;
     }
     foo(x = this) {
       console.log(this);
@@ -1166,9 +1932,7 @@ if (nested) {
     static bar(x = this) {
       console.log(this);
     }
-  };
-  let Bar = _Bar;
-  Bar.y = _Bar.z;
+  }
   new Bar(bar(objBar));
 }
 var bar2;
@@ -1184,9 +1948,12 @@ const objFoo = {
     console.log(this);
   }
 };
-const _Foo = class {
+class Foo {
   constructor() {
     this.x = this;
+  }
+  static {
+    this.y = this.z;
   }
   foo(x = this) {
     console.log(this);
@@ -1194,9 +1961,7 @@ const _Foo = class {
   static bar(x = this) {
     console.log(this);
   }
-};
-let Foo = _Foo;
-Foo.y = _Foo.z;
+}
 new Foo(foo(objFoo));
 if (nested) {
   let bar2 = function(x = this) {
@@ -1208,9 +1973,12 @@ if (nested) {
       console.log(this);
     }
   };
-  const _Bar = class {
+  class Bar {
     constructor() {
       this.x = this;
+    }
+    static {
+      this.y = this.z;
     }
     foo(x = this) {
       console.log(this);
@@ -1218,9 +1986,7 @@ if (nested) {
     static bar(x = this) {
       console.log(this);
     }
-  };
-  let Bar = _Bar;
-  Bar.y = _Bar.z;
+  }
   new Bar(bar2(objBar));
 }
 
@@ -1281,8 +2047,9 @@ var objFoo = {
     console.log(this);
   }
 };
-var _Foo = class {
+var Foo = class {
   x = this;
+  static y = this.z;
   foo(x = this) {
     console.log(this);
   }
@@ -1290,8 +2057,6 @@ var _Foo = class {
     console.log(this);
   }
 };
-var Foo = _Foo;
-__publicField(Foo, "y", _Foo.z);
 new Foo(foo(objFoo));
 if (nested) {
   let bar = function(x = this) {
@@ -1316,329 +2081,3 @@ if (nested) {
   new Bar(bar(objBar));
 }
 var bar2;
-
-================================================================================
-TestTypeScriptDecoratorScopeIssue2147
----------- /out.js ----------
-var _a;
-let foo = 1;
-class Foo {
-  method1(foo2 = 2) {
-  }
-  method2(foo2 = 3) {
-  }
-}
-__decorateClass([
-  __decorateParam(0, dec(foo))
-], Foo.prototype, "method1", 1);
-__decorateClass([
-  __decorateParam(0, dec(() => foo))
-], Foo.prototype, "method2", 1);
-class Bar {
-}
-Bar.x = (_a = class {
-}, _a.y = () => {
-  let bar = 1;
-  let Baz = class {
-    method1() {
-    }
-    method2() {
-    }
-    method3(bar2) {
-    }
-    method4(bar2) {
-    }
-  };
-  __decorateClass([
-    dec(bar)
-  ], Baz.prototype, "method1", 1);
-  __decorateClass([
-    dec(() => bar)
-  ], Baz.prototype, "method2", 1);
-  __decorateClass([
-    __decorateParam(0, dec(() => bar))
-  ], Baz.prototype, "method3", 1);
-  __decorateClass([
-    __decorateParam(0, dec(() => bar))
-  ], Baz.prototype, "method4", 1);
-  Baz = __decorateClass([
-    dec(bar),
-    dec(() => bar)
-  ], Baz);
-  return Baz;
-}, _a);
-
-================================================================================
-TestTypeScriptDecorators
----------- /out.js ----------
-// all.ts
-var Foo = class {
-  constructor(arg0, arg1) {
-    this.mDef = 1;
-  }
-  method(arg0, arg1) {
-    return new Foo();
-  }
-  static sMethod(arg0, arg1) {
-    return new Foo();
-  }
-};
-Foo.sDef = new Foo();
-__decorateClass([
-  x,
-  y
-], Foo.prototype, "mUndef", 2);
-__decorateClass([
-  x,
-  y
-], Foo.prototype, "mDef", 2);
-__decorateClass([
-  x,
-  y,
-  __decorateParam(0, x0),
-  __decorateParam(0, y0),
-  __decorateParam(1, x1),
-  __decorateParam(1, y1)
-], Foo.prototype, "method", 1);
-__decorateClass([
-  x,
-  y
-], Foo.prototype, "mDecl", 2);
-__decorateClass([
-  x,
-  y
-], Foo, "sUndef", 2);
-__decorateClass([
-  x,
-  y
-], Foo, "sDef", 2);
-__decorateClass([
-  x,
-  y,
-  __decorateParam(0, x0),
-  __decorateParam(0, y0),
-  __decorateParam(1, x1),
-  __decorateParam(1, y1)
-], Foo, "sMethod", 1);
-__decorateClass([
-  x,
-  y
-], Foo, "mDecl", 2);
-Foo = __decorateClass([
-  x.y(),
-  new y.x(),
-  __decorateParam(0, x0),
-  __decorateParam(0, y0),
-  __decorateParam(1, x1),
-  __decorateParam(1, y1)
-], Foo);
-
-// all_computed.ts
-var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-var Foo2 = class {
-  constructor() {
-    this[_b] = 1;
-    this[_e] = 2;
-  }
-  [(_a = mUndef(), _b = mDef(), _c = method())](arg0, arg1) {
-    return new Foo2();
-  }
-  static [(_d = mDecl(), xUndef(), _e = xDef(), yUndef(), _f = yDef(), _g = sUndef(), _h = sDef(), _i = sMethod())](arg0, arg1) {
-    return new Foo2();
-  }
-};
-_j = mDecl();
-Foo2[_f] = 3;
-Foo2[_h] = new Foo2();
-__decorateClass([
-  x,
-  y
-], Foo2.prototype, _a, 2);
-__decorateClass([
-  x,
-  y
-], Foo2.prototype, _b, 2);
-__decorateClass([
-  x,
-  y,
-  __decorateParam(0, x0),
-  __decorateParam(0, y0),
-  __decorateParam(1, x1),
-  __decorateParam(1, y1)
-], Foo2.prototype, _c, 1);
-__decorateClass([
-  x,
-  y
-], Foo2.prototype, _d, 2);
-__decorateClass([
-  x,
-  y
-], Foo2, _g, 2);
-__decorateClass([
-  x,
-  y
-], Foo2, _h, 2);
-__decorateClass([
-  x,
-  y,
-  __decorateParam(0, x0),
-  __decorateParam(0, y0),
-  __decorateParam(1, x1),
-  __decorateParam(1, y1)
-], Foo2, _i, 1);
-__decorateClass([
-  x,
-  y
-], Foo2, _j, 2);
-Foo2 = __decorateClass([
-  x?.[_ + "y"](),
-  new y?.[_ + "x"]()
-], Foo2);
-
-// a.ts
-var a_class = class {
-  fn() {
-    return new a_class();
-  }
-};
-a_class.z = new a_class();
-a_class = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], a_class);
-var a = a_class;
-
-// b.ts
-var b_class = class {
-  fn() {
-    return new b_class();
-  }
-};
-b_class.z = new b_class();
-b_class = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], b_class);
-var b = b_class;
-
-// c.ts
-var c = class {
-  fn() {
-    return new c();
-  }
-};
-c.z = new c();
-c = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], c);
-
-// d.ts
-var d = class {
-  fn() {
-    return new d();
-  }
-};
-d.z = new d();
-d = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], d);
-
-// e.ts
-var e_default = class {
-};
-e_default = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], e_default);
-
-// f.ts
-var f = class {
-  fn() {
-    return new f();
-  }
-};
-f.z = new f();
-f = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], f);
-
-// g.ts
-var g_default = class {
-};
-g_default = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], g_default);
-
-// h.ts
-var h = class {
-  fn() {
-    return new h();
-  }
-};
-h.z = new h();
-h = __decorateClass([
-  x(() => 0),
-  y(() => 1)
-], h);
-
-// i.ts
-var i_class = class {
-};
-__decorateClass([
-  x(() => 0),
-  y(() => 1)
-], i_class.prototype, "foo", 2);
-var i = i_class;
-
-// j.ts
-var j = class {
-  foo() {
-  }
-};
-__decorateClass([
-  x(() => 0),
-  y(() => 1)
-], j.prototype, "foo", 1);
-
-// k.ts
-var k_default = class {
-  foo(x2) {
-  }
-};
-__decorateClass([
-  __decorateParam(0, x(() => 0)),
-  __decorateParam(0, y(() => 1))
-], k_default.prototype, "foo", 1);
-
-// arguments.ts
-function dec(x2) {
-}
-function fn(x2) {
-  var _a2;
-  class Foo3 {
-    [_a2 = arguments[0]]() {
-    }
-  }
-  __decorateClass([
-    dec(arguments[0])
-  ], Foo3.prototype, _a2, 1);
-  return Foo3;
-}
-
-// entry.js
-console.log(Foo, Foo2, a, b, c, d, e_default, f, g_default, h, i, j, k_default, fn);
-
-================================================================================
-TestTypeScriptDecoratorsKeepNames
----------- /out.js ----------
-// entry.ts
-var Foo = class {
-};
-__name(Foo, "Foo");
-Foo = __decorateClass([
-  decoratorMustComeAfterName
-], Foo);

@@ -279,6 +279,18 @@ func TestNumber(t *testing.T) {
 	expectPrintedMinify(t, "x = 0xFFFF_FFFF_FFFF_F000", "x=0xfffffffffffff000;")
 	expectPrintedMinify(t, "x = 0xFFFF_FFFF_FFFF_F800", "x=1844674407370955e4;")
 	expectPrintedMinify(t, "x = 0xFFFF_FFFF_FFFF_FFFF", "x=18446744073709552e3;")
+
+	// Check printing a space in between a number and a subsequent "."
+	expectPrintedMinify(t, "x = 0.0001 .y", "x=1e-4.y;")
+	expectPrintedMinify(t, "x = 0.001 .y", "x=.001.y;")
+	expectPrintedMinify(t, "x = 0.01 .y", "x=.01.y;")
+	expectPrintedMinify(t, "x = 0.1 .y", "x=.1.y;")
+	expectPrintedMinify(t, "x = 0 .y", "x=0 .y;")
+	expectPrintedMinify(t, "x = 10 .y", "x=10 .y;")
+	expectPrintedMinify(t, "x = 100 .y", "x=100 .y;")
+	expectPrintedMinify(t, "x = 1000 .y", "x=1e3.y;")
+	expectPrintedMinify(t, "x = 12345 .y", "x=12345 .y;")
+	expectPrintedMinify(t, "x = 0xFFFF_0000_FFFF_0000 .y", "x=0xffff0000ffff0000.y;")
 }
 
 func TestArray(t *testing.T) {
@@ -559,14 +571,14 @@ func TestCommentsAndParentheses(t *testing.T) {
 
 func TestPureComment(t *testing.T) {
 	expectPrinted(t,
-		"(function() {})",
-		"(function() {\n});\n")
+		"(function() { foo() })",
+		"(function() {\n  foo();\n});\n")
 	expectPrinted(t,
-		"(function() {})()",
-		"(function() {\n})();\n")
+		"(function() { foo() })()",
+		"(function() {\n  foo();\n})();\n")
 	expectPrinted(t,
-		"/*@__PURE__*/(function() {})()",
-		"/* @__PURE__ */ (function() {\n})();\n")
+		"/*@__PURE__*/(function() { foo() })()",
+		"/* @__PURE__ */ (function() {\n  foo();\n})();\n")
 
 	expectPrinted(t,
 		"new (function() {})",
@@ -579,14 +591,14 @@ func TestPureComment(t *testing.T) {
 		"/* @__PURE__ */ new function() {\n}();\n")
 
 	expectPrinted(t,
-		"export default (function() {})",
-		"export default (function() {\n});\n")
+		"export default (function() { foo() })",
+		"export default (function() {\n  foo();\n});\n")
 	expectPrinted(t,
-		"export default (function() {})()",
-		"export default (function() {\n})();\n")
+		"export default (function() { foo() })()",
+		"export default (function() {\n  foo();\n})();\n")
 	expectPrinted(t,
-		"export default /*@__PURE__*/(function() {})()",
-		"export default /* @__PURE__ */ (function() {\n})();\n")
+		"export default /*@__PURE__*/(function() { foo() })()",
+		"export default /* @__PURE__ */ (function() {\n  foo();\n})();\n")
 }
 
 func TestGenerator(t *testing.T) {
@@ -681,6 +693,13 @@ func TestClass(t *testing.T) {
 	expectPrinted(t, "class Foo { static foo() {} }", "class Foo {\n  static foo() {\n  }\n}\n")
 	expectPrinted(t, "class Foo { static get foo() {} }", "class Foo {\n  static get foo() {\n  }\n}\n")
 	expectPrinted(t, "class Foo { static set foo(x) {} }", "class Foo {\n  static set foo(x) {\n  }\n}\n")
+}
+
+func TestAutoAccessors(t *testing.T) {
+	expectPrinted(t, "class Foo { accessor x; static accessor y }", "class Foo {\n  accessor x;\n  static accessor y;\n}\n")
+	expectPrinted(t, "class Foo { accessor [x]; static accessor [y] }", "class Foo {\n  accessor [x];\n  static accessor [y];\n}\n")
+	expectPrintedMinify(t, "class Foo { accessor x; static accessor y }", "class Foo{accessor x;static accessor y}")
+	expectPrintedMinify(t, "class Foo { accessor [x]; static accessor [y] }", "class Foo{accessor[x];static accessor[y]}")
 }
 
 func TestPrivateIdentifiers(t *testing.T) {
@@ -835,7 +854,7 @@ func TestMinify(t *testing.T) {
 	expectPrinted(t, "x = '\\n'", "x = \"\\n\";\n")
 	expectPrintedMangle(t, "x = '\\n'", "x = `\n`;\n")
 	expectPrintedMangle(t, "x = {'\\n': 0}", "x = { \"\\n\": 0 };\n")
-	expectPrintedMangle(t, "(class{'\\n' = 0})", "(class {\n  \"\\n\" = 0;\n});\n")
+	expectPrintedMangle(t, "x = class{'\\n' = 0}", "x = class {\n  \"\\n\" = 0;\n};\n")
 	expectPrintedMangle(t, "class Foo{'\\n' = 0}", "class Foo {\n  \"\\n\" = 0;\n}\n")
 
 	// Special identifiers must not be minified
@@ -1083,4 +1102,17 @@ func TestBinaryOperatorVisitor(t *testing.T) {
 	// Make sure deeply-nested ASTs don't cause a stack overflow
 	x := "x = f()" + strings.Repeat(" || f()", 10_000) + ";\n"
 	expectPrinted(t, x, x)
+}
+
+// See: https://github.com/tc39/proposal-explicit-resource-management
+func TestUsing(t *testing.T) {
+	expectPrinted(t, "using x = y", "using x = y;\n")
+	expectPrinted(t, "using x = y, z = _", "using x = y, z = _;\n")
+	expectPrintedMinify(t, "using x = y", "using x=y;")
+	expectPrintedMinify(t, "using x = y, z = _", "using x=y,z=_;")
+
+	expectPrinted(t, "await using x = y", "await using x = y;\n")
+	expectPrinted(t, "await using x = y, z = _", "await using x = y, z = _;\n")
+	expectPrintedMinify(t, "await using x = y", "await using x=y;")
+	expectPrintedMinify(t, "await using x = y, z = _", "await using x=y,z=_;")
 }
