@@ -4,21 +4,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/matthewmueller/esbuild_internal/ast"
 	"github.com/matthewmueller/esbuild_internal/compat"
 	"github.com/matthewmueller/esbuild_internal/config"
-	"github.com/matthewmueller/esbuild_internal/js_ast"
 	"github.com/matthewmueller/esbuild_internal/js_parser"
 	"github.com/matthewmueller/esbuild_internal/logger"
 	"github.com/matthewmueller/esbuild_internal/renamer"
 	"github.com/matthewmueller/esbuild_internal/test"
 )
-
-func assertEqual(t *testing.T, a interface{}, b interface{}) {
-	t.Helper()
-	if a != b {
-		t.Fatalf("%s != %s", a, b)
-	}
-}
 
 func expectPrintedCommon(t *testing.T, name string, contents string, expected string, options config.Options) {
 	t.Helper()
@@ -29,13 +22,16 @@ func expectPrintedCommon(t *testing.T, name string, contents string, expected st
 		msgs := log.Done()
 		text := ""
 		for _, msg := range msgs {
+			if msg.Kind != logger.Error {
+				continue
+			}
 			text += msg.String(logger.OutputOptions{}, logger.TerminalInfo{})
 		}
 		test.AssertEqualWithDiff(t, text, "")
 		if !ok {
 			t.Fatal("Parse error")
 		}
-		symbols := js_ast.NewSymbolMap(1)
+		symbols := ast.NewSymbolMap(1)
 		symbols.SymbolsForSource[0] = tree.Symbols
 		r := renamer.NewNoOpRenamer(symbols)
 		js := Print(tree, symbols, r, Options{
@@ -93,8 +89,8 @@ func expectPrintedMinifyASCII(t *testing.T, contents string, expected string) {
 func expectPrintedTarget(t *testing.T, esVersion int, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents, contents, expected, config.Options{
-		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine][]int{
-			compat.ES: {esVersion},
+		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine]compat.Semver{
+			compat.ES: {Parts: []int{esVersion}},
 		}),
 	})
 }
@@ -102,8 +98,8 @@ func expectPrintedTarget(t *testing.T, esVersion int, contents string, expected 
 func expectPrintedTargetMinify(t *testing.T, esVersion int, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents+" [minified]", contents, expected, config.Options{
-		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine][]int{
-			compat.ES: {esVersion},
+		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine]compat.Semver{
+			compat.ES: {Parts: []int{esVersion}},
 		}),
 		MinifyWhitespace: true,
 	})
@@ -112,8 +108,8 @@ func expectPrintedTargetMinify(t *testing.T, esVersion int, contents string, exp
 func expectPrintedTargetMangle(t *testing.T, esVersion int, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents+" [mangled]", contents, expected, config.Options{
-		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine][]int{
-			compat.ES: {esVersion},
+		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine]compat.Semver{
+			compat.ES: {Parts: []int{esVersion}},
 		}),
 		MinifySyntax: true,
 	})
@@ -122,8 +118,8 @@ func expectPrintedTargetMangle(t *testing.T, esVersion int, contents string, exp
 func expectPrintedTargetASCII(t *testing.T, esVersion int, contents string, expected string) {
 	t.Helper()
 	expectPrintedCommon(t, contents+" [ascii]", contents, expected, config.Options{
-		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine][]int{
-			compat.ES: {esVersion},
+		UnsupportedJSFeatures: compat.UnsupportedJSFeatures(map[compat.Engine]compat.Semver{
+			compat.ES: {Parts: []int{esVersion}},
 		}),
 		ASCIIOnly: true,
 	})
@@ -511,28 +507,45 @@ func TestObject(t *testing.T) {
 	expectPrinted(t, "let x = () => ({}.x)", "let x = () => ({}).x;\n")
 	expectPrinted(t, "let x = () => ({} = {})", "let x = () => ({} = {});\n")
 	expectPrinted(t, "let x = () => (x, {} = {})", "let x = () => (x, {} = {});\n")
+
+	// "{ __proto__: __proto__ }" must not become "{ __proto__ }"
+	expectPrinted(t, "function foo(__proto__) { return { __proto__: __proto__ } }", "function foo(__proto__) {\n  return { __proto__: __proto__ };\n}\n")
+	expectPrinted(t, "function foo(__proto__) { return { '__proto__': __proto__ } }", "function foo(__proto__) {\n  return { \"__proto__\": __proto__ };\n}\n")
+	expectPrinted(t, "function foo(__proto__) { return { ['__proto__']: __proto__ } }", "function foo(__proto__) {\n  return { [\"__proto__\"]: __proto__ };\n}\n")
+	expectPrinted(t, "import { __proto__ } from 'foo'; let foo = () => ({ __proto__: __proto__ })", "import { __proto__ } from \"foo\";\nlet foo = () => ({ __proto__: __proto__ });\n")
+	expectPrinted(t, "import { __proto__ } from 'foo'; let foo = () => ({ '__proto__': __proto__ })", "import { __proto__ } from \"foo\";\nlet foo = () => ({ \"__proto__\": __proto__ });\n")
+	expectPrinted(t, "import { __proto__ } from 'foo'; let foo = () => ({ ['__proto__']: __proto__ })", "import { __proto__ } from \"foo\";\nlet foo = () => ({ [\"__proto__\"]: __proto__ });\n")
+
+	// Don't use ES6+ features (such as a shorthand or computed property name) in ES5
+	expectPrintedTarget(t, 5, "function foo(__proto__) { return { __proto__ } }", "function foo(__proto__) {\n  return { __proto__: __proto__ };\n}\n")
+}
+
+func TestSwitch(t *testing.T) {
+	// Ideally comments on case clauses would be preserved
+	expectPrinted(t, "switch (x) { /* 1 */ case 1: /* 2 */ case 2: /* default */ default: break }",
+		"switch (x) {\n  /* 1 */\n  case 1:\n  /* 2 */\n  case 2:\n  /* default */\n  default:\n    break;\n}\n")
 }
 
 func TestFor(t *testing.T) {
 	// Make sure "in" expressions are forbidden in the right places
-	expectPrinted(t, "for ((a in b);;);", "for ((a in b); ; )\n  ;\n")
-	expectPrinted(t, "for (a ? b : (c in d);;);", "for (a ? b : (c in d); ; )\n  ;\n")
-	expectPrinted(t, "for ((a ? b : c in d).foo;;);", "for ((a ? b : c in d).foo; ; )\n  ;\n")
-	expectPrinted(t, "for (var x = (a in b);;);", "for (var x = (a in b); ; )\n  ;\n")
-	expectPrinted(t, "for (x = (a in b);;);", "for (x = (a in b); ; )\n  ;\n")
-	expectPrinted(t, "for (x == (a in b);;);", "for (x == (a in b); ; )\n  ;\n")
-	expectPrinted(t, "for (1 * (x == a in b);;);", "for (1 * (x == a in b); ; )\n  ;\n")
-	expectPrinted(t, "for (a ? b : x = (c in d);;);", "for (a ? b : x = (c in d); ; )\n  ;\n")
-	expectPrinted(t, "for (var x = y = (a in b);;);", "for (var x = y = (a in b); ; )\n  ;\n")
-	expectPrinted(t, "for ([a in b];;);", "for ([a in b]; ; )\n  ;\n")
-	expectPrinted(t, "for (x(a in b);;);", "for (x(a in b); ; )\n  ;\n")
-	expectPrinted(t, "for (x[a in b];;);", "for (x[a in b]; ; )\n  ;\n")
-	expectPrinted(t, "for (x?.[a in b];;);", "for (x?.[a in b]; ; )\n  ;\n")
-	expectPrinted(t, "for ((x => a in b);;);", "for ((x) => (a in b); ; )\n  ;\n")
+	expectPrinted(t, "for ((a in b);;);", "for ((a in b); ; ) ;\n")
+	expectPrinted(t, "for (a ? b : (c in d);;);", "for (a ? b : (c in d); ; ) ;\n")
+	expectPrinted(t, "for ((a ? b : c in d).foo;;);", "for ((a ? b : c in d).foo; ; ) ;\n")
+	expectPrinted(t, "for (var x = (a in b);;);", "for (var x = (a in b); ; ) ;\n")
+	expectPrinted(t, "for (x = (a in b);;);", "for (x = (a in b); ; ) ;\n")
+	expectPrinted(t, "for (x == (a in b);;);", "for (x == (a in b); ; ) ;\n")
+	expectPrinted(t, "for (1 * (x == a in b);;);", "for (1 * (x == a in b); ; ) ;\n")
+	expectPrinted(t, "for (a ? b : x = (c in d);;);", "for (a ? b : x = (c in d); ; ) ;\n")
+	expectPrinted(t, "for (var x = y = (a in b);;);", "for (var x = y = (a in b); ; ) ;\n")
+	expectPrinted(t, "for ([a in b];;);", "for ([a in b]; ; ) ;\n")
+	expectPrinted(t, "for (x(a in b);;);", "for (x(a in b); ; ) ;\n")
+	expectPrinted(t, "for (x[a in b];;);", "for (x[a in b]; ; ) ;\n")
+	expectPrinted(t, "for (x?.[a in b];;);", "for (x?.[a in b]; ; ) ;\n")
+	expectPrinted(t, "for ((x => a in b);;);", "for ((x) => (a in b); ; ) ;\n")
 
 	// Make sure for-of loops with commas are wrapped in parentheses
-	expectPrinted(t, "for (let a in b, c);", "for (let a in b, c)\n  ;\n")
-	expectPrinted(t, "for (let a of (b, c));", "for (let a of (b, c))\n  ;\n")
+	expectPrinted(t, "for (let a in b, c);", "for (let a in b, c) ;\n")
+	expectPrinted(t, "for (let a of (b, c));", "for (let a of (b, c)) ;\n")
 }
 
 func TestFunction(t *testing.T) {
@@ -564,8 +577,8 @@ func TestCommentsAndParentheses(t *testing.T) {
 	expectPrinted(t, "export default (/* foo */ function f() {});", "export default (\n  /* foo */\n  function f() {\n  }\n);\n")
 	expectPrinted(t, "export default (/* foo */ class x {});", "export default (\n  /* foo */\n  class x {\n  }\n);\n")
 	expectPrinted(t, "x = () => (/* foo */ {});", "x = () => (\n  /* foo */\n  {}\n);\n")
-	expectPrinted(t, "for ((/* foo */ let).x of y) ;", "for (\n  /* foo */\n  (let).x of y\n)\n  ;\n")
-	expectPrinted(t, "for (/* foo */ (let).x of y) ;", "for (\n  /* foo */\n  (let).x of y\n)\n  ;\n")
+	expectPrinted(t, "for ((/* foo */ let).x of y) ;", "for (\n  /* foo */\n  (let).x of y\n) ;\n")
+	expectPrinted(t, "for (/* foo */ (let).x of y) ;", "for (\n  /* foo */\n  (let).x of y\n) ;\n")
 	expectPrinted(t, "function *x() { yield (/* foo */ y) }", "function* x() {\n  yield (\n    /* foo */\n    y\n  );\n}\n")
 }
 
@@ -707,6 +720,13 @@ func TestPrivateIdentifiers(t *testing.T) {
 	expectPrintedMinify(t, "class Foo { #foo; foo() { return #foo in this } }", "class Foo{#foo;foo(){return#foo in this}}")
 }
 
+func TestDecorators(t *testing.T) {
+	example := "class Foo {\n@w\nw; @x x; @a1\n@b1@b2\n@c1@c2@c3\ny = @y1 @y2 class {}; @a1\n@b1@b2\n@c1@c2@c3 z =\n@z1\n@z2\nclass {}}"
+	expectPrinted(t, example, "class Foo {\n  @w\n  w;\n  @x x;\n  @a1\n  @b1 @b2\n  @c1 @c2 @c3\n  "+
+		"y = @y1 @y2 class {\n  };\n  @a1\n  @b1 @b2\n  @c1 @c2 @c3 z = @z1 @z2 class {\n  };\n}\n")
+	expectPrintedMinify(t, example, "class Foo{@w w;@x x;@a1@b1@b2@c1@c2@c3 y=@y1@y2 class{};@a1@b1@b2@c1@c2@c3 z=@z1@z2 class{}}")
+}
+
 func TestImport(t *testing.T) {
 	expectPrinted(t, "import('path');", "import(\"path\");\n") // The semicolon must not be a separate statement
 
@@ -805,7 +825,7 @@ func TestWhitespace(t *testing.T) {
 
 	expectPrintedMinify(t, "()=>({})", "()=>({});")
 	expectPrintedMinify(t, "()=>({}[1])", "()=>({})[1];")
-	expectPrintedMinify(t, "()=>({}+0)", "()=>({}+0);")
+	expectPrintedMinify(t, "()=>({}+0)", "()=>\"[object Object]0\";")
 	expectPrintedMinify(t, "()=>function(){}", "()=>function(){};")
 
 	expectPrintedMinify(t, "(function(){})", "(function(){});")
@@ -939,31 +959,41 @@ func TestJSX(t *testing.T) {
 	expectPrintedJSX(t, "<a b></a>", "<a b />;\n")
 
 	expectPrintedJSX(t, "<a b={true}></a>", "<a b={true} />;\n")
-	expectPrintedJSX(t, "<a b={'x'}></a>", "<a b=\"x\" />;\n")
-	expectPrintedJSX(t, "<a b={`'`}></a>", "<a b=\"'\" />;\n")
-	expectPrintedJSX(t, "<a b={`\"`}></a>", "<a b='\"' />;\n")
+	expectPrintedJSX(t, "<a b='x'></a>", "<a b='x' />;\n")
+	expectPrintedJSX(t, "<a b=\"x\"></a>", "<a b=\"x\" />;\n")
+	expectPrintedJSX(t, "<a b={'x'}></a>", "<a b={\"x\"} />;\n")
+	expectPrintedJSX(t, "<a b={`'`}></a>", "<a b={`'`} />;\n")
+	expectPrintedJSX(t, "<a b={`\"`}></a>", "<a b={`\"`} />;\n")
 	expectPrintedJSX(t, "<a b={`'\"`}></a>", "<a b={`'\"`} />;\n")
-	expectPrintedJSX(t, "<a b=\"&quot;\"></a>", "<a b='\"' />;\n")
-	expectPrintedJSX(t, "<a b=\"&amp;\"></a>", "<a b={\"&\"} />;\n")
+	expectPrintedJSX(t, "<a b=\"&quot;\"></a>", "<a b=\"&quot;\" />;\n")
+	expectPrintedJSX(t, "<a b=\"&amp;\"></a>", "<a b=\"&amp;\" />;\n")
 
 	expectPrintedJSX(t, "<a>x</a>", "<a>x</a>;\n")
-	expectPrintedJSX(t, "<a>x\ny</a>", "<a>x y</a>;\n")
-	expectPrintedJSX(t, "<a>{'x'}{'y'}</a>", "<a>\n  {\"x\"}\n  {\"y\"}\n</a>;\n")
+	expectPrintedJSX(t, "<a>x\ny</a>", "<a>x\ny</a>;\n")
+	expectPrintedJSX(t, "<a>{'x'}{'y'}</a>", "<a>{\"x\"}{\"y\"}</a>;\n")
 	expectPrintedJSX(t, "<a> x</a>", "<a> x</a>;\n")
 	expectPrintedJSX(t, "<a>x </a>", "<a>x </a>;\n")
-	expectPrintedJSX(t, "<a>&#10;</a>", "<a>{\"\\n\"}</a>;\n")
-	expectPrintedJSX(t, "<a>&amp;</a>", "<a>{\"&\"}</a>;\n")
-	expectPrintedJSX(t, "<a>&lt;</a>", "<a>{\"<\"}</a>;\n")
-	expectPrintedJSX(t, "<a>&gt;</a>", "<a>{\">\"}</a>;\n")
-	expectPrintedJSX(t, "<a>&#123;</a>", "<a>{\"{\"}</a>;\n")
-	expectPrintedJSX(t, "<a>&#125;</a>", "<a>{\"}\"}</a>;\n")
+	expectPrintedJSX(t, "<a>&#10;</a>", "<a>&#10;</a>;\n")
+	expectPrintedJSX(t, "<a>&amp;</a>", "<a>&amp;</a>;\n")
+	expectPrintedJSX(t, "<a>&lt;</a>", "<a>&lt;</a>;\n")
+	expectPrintedJSX(t, "<a>&gt;</a>", "<a>&gt;</a>;\n")
+	expectPrintedJSX(t, "<a>&#123;</a>", "<a>&#123;</a>;\n")
+	expectPrintedJSX(t, "<a>&#125;</a>", "<a>&#125;</a>;\n")
 
 	expectPrintedJSX(t, "<a><x/></a>", "<a><x /></a>;\n")
-	expectPrintedJSX(t, "<a><x/><y/></a>", "<a>\n  <x />\n  <y />\n</a>;\n")
-	expectPrintedJSX(t, "<a>b<c/>d</a>", "<a>\n  {\"b\"}\n  <c />\n  {\"d\"}\n</a>;\n")
+	expectPrintedJSX(t, "<a><x/><y/></a>", "<a><x /><y /></a>;\n")
+	expectPrintedJSX(t, "<a>b<c/>d</a>", "<a>b<c />d</a>;\n")
 
 	expectPrintedJSX(t, "<></>", "<></>;\n")
-	expectPrintedJSX(t, "<>x<y/>z</>", "<>\n  {\"x\"}\n  <y />\n  {\"z\"}\n</>;\n")
+	expectPrintedJSX(t, "<>x<y/>z</>", "<>x<y />z</>;\n")
+
+	// JSX elements as JSX attribute values
+	expectPrintedJSX(t, "<a b=<c/>/>", "<a b=<c /> />;\n")
+	expectPrintedJSX(t, "<a b=<>c</>/>", "<a b=<>c</> />;\n")
+	expectPrintedJSX(t, "<a b=<>{c}</>/>", "<a b=<>{c}</> />;\n")
+	expectPrintedJSX(t, "<a b={<c/>}/>", "<a b={<c />} />;\n")
+	expectPrintedJSX(t, "<a b={<>c</>}/>", "<a b={<>c</>} />;\n")
+	expectPrintedJSX(t, "<a b={<>{c}</>}/>", "<a b={<>{c}</>} />;\n")
 
 	// These can't be escaped because JSX lacks a syntax for escapes
 	expectPrintedJSXASCII(t, "<π/>", "<π />;\n")
@@ -974,16 +1004,23 @@ func TestJSX(t *testing.T) {
 	expectPrintedJSXASCII(t, "<a π/>", "<a π />;\n")
 	expectPrintedJSXASCII(t, "<a 𐀀/>", "<a 𐀀 />;\n")
 
-	// These can be escaped but as JS strings (since XML entities in JSX aren't standard)
-	expectPrintedJSXASCII(t, "<a b='π'/>", "<a b={\"\\u03C0\"} />;\n")
-	expectPrintedJSXASCII(t, "<a b='𐀀'/>", "<a b={\"\\u{10000}\"} />;\n")
-	expectPrintedJSXASCII(t, "<a>π</a>", "<a>{\"\\u03C0\"}</a>;\n")
-	expectPrintedJSXASCII(t, "<a>𐀀</a>", "<a>{\"\\u{10000}\"}</a>;\n")
+	// JSX text is deliberately not printed as ASCII when JSX preservation is
+	// enabled. This is because:
+	//
+	// a) The JSX specification doesn't say how JSX text is supposed to be interpreted
+	// b) Enabling JSX preservation means that JSX will be transformed again anyway
+	// c) People do very weird/custom things with JSX that "preserve" shouldn't break
+	//
+	// See also: https://github.com/evanw/esbuild/issues/3605
+	expectPrintedJSXASCII(t, "<a b='π'/>", "<a b='π' />;\n")
+	expectPrintedJSXASCII(t, "<a b='𐀀'/>", "<a b='𐀀' />;\n")
+	expectPrintedJSXASCII(t, "<a>π</a>", "<a>π</a>;\n")
+	expectPrintedJSXASCII(t, "<a>𐀀</a>", "<a>𐀀</a>;\n")
 
-	expectPrintedJSXMinify(t, "<a b c={x,y} d='true'/>", "<a b c={(x,y)}d=\"true\"/>;")
+	expectPrintedJSXMinify(t, "<a b c={x,y} d='true'/>", "<a b c={(x,y)}d='true'/>;")
 	expectPrintedJSXMinify(t, "<a><b/><c/></a>", "<a><b/><c/></a>;")
 	expectPrintedJSXMinify(t, "<a> x <b/> y </a>", "<a> x <b/> y </a>;")
-	expectPrintedJSXMinify(t, "<a>{' x '}{'<b/>'}{' y '}</a>", "<a> x {\"<b/>\"} y </a>;")
+	expectPrintedJSXMinify(t, "<a>{' x '}{'<b/>'}{' y '}</a>", "<a>{\" x \"}{\"<b/>\"}{\" y \"}</a>;")
 }
 
 func TestJSXSingleLine(t *testing.T) {
@@ -1115,4 +1152,16 @@ func TestUsing(t *testing.T) {
 	expectPrinted(t, "await using x = y, z = _", "await using x = y, z = _;\n")
 	expectPrintedMinify(t, "await using x = y", "await using x=y;")
 	expectPrintedMinify(t, "await using x = y, z = _", "await using x=y,z=_;")
+}
+
+func TestMinifyBigInt(t *testing.T) {
+	expectPrintedTargetMangle(t, 2019, "x = 0b100101n", "x = /* @__PURE__ */ BigInt(37);\n")
+	expectPrintedTargetMangle(t, 2019, "x = 0B100101n", "x = /* @__PURE__ */ BigInt(37);\n")
+	expectPrintedTargetMangle(t, 2019, "x = 0o76543210n", "x = /* @__PURE__ */ BigInt(16434824);\n")
+	expectPrintedTargetMangle(t, 2019, "x = 0O76543210n", "x = /* @__PURE__ */ BigInt(16434824);\n")
+	expectPrintedTargetMangle(t, 2019, "x = 0xFEDCBA9876543210n", "x = /* @__PURE__ */ BigInt(\"0xFEDCBA9876543210\");\n")
+	expectPrintedTargetMangle(t, 2019, "x = 0XFEDCBA9876543210n", "x = /* @__PURE__ */ BigInt(\"0XFEDCBA9876543210\");\n")
+	expectPrintedTargetMangle(t, 2019, "x = 0xb0ba_cafe_f00dn", "x = /* @__PURE__ */ BigInt(0xb0bacafef00d);\n")
+	expectPrintedTargetMangle(t, 2019, "x = 0xB0BA_CAFE_F00Dn", "x = /* @__PURE__ */ BigInt(0xB0BACAFEF00D);\n")
+	expectPrintedTargetMangle(t, 2019, "x = 102030405060708090807060504030201n", "x = /* @__PURE__ */ BigInt(\"102030405060708090807060504030201\");\n")
 }

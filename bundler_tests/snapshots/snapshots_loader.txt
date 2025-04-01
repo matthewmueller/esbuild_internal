@@ -12,16 +12,16 @@ console.log(require_test());
 
 ================================================================================
 TestEmptyLoaderCSS
----------- entry.css.map ----------
+---------- /out.js.map ----------
 {
   "version": 3,
   "sources": ["entry.css"],
   "sourcesContent": ["\n\t\t\t\t@import 'a.empty';\n\t\t\t\ta { background: url(b.empty) }\n\t\t\t"],
-  "mappings": ";AAEI;AAAI;AAAA;",
+  "mappings": ";AAEI;AAAI,cAAY;AAAa;",
   "names": []
 }
 
----------- entry.css ----------
+---------- /out.js ----------
 /* entry.css */
 a {
   background: url();
@@ -54,13 +54,13 @@ a {
     }
   },
   "outputs": {
-    "entry.css.map": {
+    "out.js.map": {
       "imports": [],
       "exports": [],
       "inputs": {},
-      "bytes": 198
+      "bytes": 203
     },
-    "entry.css": {
+    "out.js": {
       "imports": [
         {
           "path": "",
@@ -81,7 +81,7 @@ a {
 
 ================================================================================
 TestEmptyLoaderJS
----------- entry.js.map ----------
+---------- /out.js.map ----------
 {
   "version": 3,
   "sources": ["entry.js"],
@@ -90,7 +90,7 @@ TestEmptyLoaderJS
   "names": ["def"]
 }
 
----------- entry.js ----------
+---------- /out.js ----------
 // b.empty
 var require_b = __commonJS({
   "b.empty"() {
@@ -154,13 +154,13 @@ console.log(ns, import_c.default, void 0);
     }
   },
   "outputs": {
-    "entry.js.map": {
+    "out.js.map": {
       "imports": [],
       "exports": [],
       "inputs": {},
       "bytes": 377
     },
-    "entry.js": {
+    "out.js": {
       "imports": [],
       "exports": [],
       "entryPoint": "entry.js",
@@ -182,7 +182,7 @@ console.log(ns, import_c.default, void 0);
 
 ================================================================================
 TestExtensionlessLoaderCSS
----------- entry.css ----------
+---------- /out.js ----------
 /* what */
 .foo {
   color: red;
@@ -192,7 +192,7 @@ TestExtensionlessLoaderCSS
 
 ================================================================================
 TestExtensionlessLoaderJS
----------- entry.js ----------
+---------- /out.js ----------
 // what
 foo();
 
@@ -257,6 +257,30 @@ var x_b64 = require_x();
 console.log(x_b64, y_default);
 
 ================================================================================
+TestLoaderBundleWithImportAttributes
+---------- /out.js ----------
+// data.json
+var data_default = { works: true };
+
+// data.json with { type: 'json' }
+var data_default2 = { works: true };
+
+// entry.js
+console.log(data_default === data_default, data_default !== data_default2);
+
+================================================================================
+TestLoaderBundleWithUnknownImportAttributesAndCopyLoader
+---------- /foo-AKINYSFH.thing ----------
+...
+---------- /bar-AXZXSLHF.thing ----------
+,,,
+---------- /out.js ----------
+// entry.js
+import foo from "./foo-AKINYSFH.thing" with { type: "whatever" };
+import bar from "./bar-AXZXSLHF.thing" with { whatever: "true" };
+console.log(foo, bar);
+
+================================================================================
 TestLoaderCopyEntryPointAdvanced
 ---------- /out/xyz-DYPYXS7B.copy ----------
 more stuff
@@ -311,7 +335,81 @@ console.log(x);
 ---------- /out/src/entry.css ----------
 /* Users/user/project/src/entry.css */
 body {
-  background: url(../assets/some.file);
+  background: url("../assets/some.file");
+}
+---------- metafile.json ----------
+{
+  "inputs": {
+    "Users/user/project/assets/some.file": {
+      "bytes": 5,
+      "imports": []
+    },
+    "Users/user/project/src/entry.js": {
+      "bytes": 63,
+      "imports": [
+        {
+          "path": "Users/user/project/assets/some.file",
+          "kind": "import-statement",
+          "original": "../assets/some.file"
+        }
+      ],
+      "format": "esm"
+    },
+    "Users/user/project/src/entry.css": {
+      "bytes": 64,
+      "imports": [
+        {
+          "path": "Users/user/project/assets/some.file",
+          "kind": "url-token",
+          "original": "../assets/some.file"
+        }
+      ]
+    }
+  },
+  "outputs": {
+    "out/assets/some.file": {
+      "imports": [],
+      "exports": [],
+      "entryPoint": "Users/user/project/assets/some.file",
+      "inputs": {
+        "Users/user/project/assets/some.file": {
+          "bytesInOutput": 5
+        }
+      },
+      "bytes": 5
+    },
+    "out/src/entry.js": {
+      "imports": [
+        {
+          "path": "out/assets/some.file",
+          "kind": "import-statement"
+        }
+      ],
+      "exports": [],
+      "entryPoint": "Users/user/project/src/entry.js",
+      "inputs": {
+        "Users/user/project/src/entry.js": {
+          "bytesInOutput": 53
+        }
+      },
+      "bytes": 88
+    },
+    "out/src/entry.css": {
+      "imports": [
+        {
+          "path": "out/assets/some.file",
+          "kind": "url-token"
+        }
+      ],
+      "entryPoint": "Users/user/project/src/entry.css",
+      "inputs": {
+        "Users/user/project/src/entry.css": {
+          "bytesInOutput": 51
+        }
+      },
+      "bytes": 90
+    }
+  }
 }
 
 ================================================================================
@@ -321,7 +419,7 @@ stuff
 ---------- /out/src/entry.css ----------
 /* Users/user/project/src/entry.css */
 body {
-  background: url(../some-BYATPJRB.file);
+  background: url("../some-BYATPJRB.file");
 }
 
 ================================================================================
@@ -666,7 +764,7 @@ x
 ---------- /out/entries/entry.css ----------
 /* src/shared/common.css */
 div {
-  background: url(../common-LSAMBFUD.png);
+  background: url("../common-LSAMBFUD.png");
 }
 
 /* src/entries/entry.css */
@@ -674,7 +772,7 @@ div {
 ---------- /out/entries/other/entry.css ----------
 /* src/shared/common.css */
 div {
-  background: url(../../common-LSAMBFUD.png);
+  background: url("../../common-LSAMBFUD.png");
 }
 
 /* src/entries/other/entry.css */
@@ -704,7 +802,7 @@ x
 ---------- /out/entries/entry.css ----------
 /* src/entries/entry.css */
 div {
-  background: url(https://example.com/images/image-LSAMBFUD.png);
+  background: url("https://example.com/images/image-LSAMBFUD.png");
 }
 
 ================================================================================
@@ -725,7 +823,7 @@ x
 ---------- /out/entries/entry.css ----------
 /* src/entries/entry.css */
 div {
-  background: url(https://example.com/image-LSAMBFUD.png);
+  background: url("https://example.com/image-LSAMBFUD.png");
 }
 
 ================================================================================
@@ -746,7 +844,7 @@ x
 ---------- /out/entries/entry.css ----------
 /* src/entries/entry.css */
 div {
-  background: url(../images/image-LSAMBFUD.png);
+  background: url("../images/image-LSAMBFUD.png");
 }
 
 ================================================================================
@@ -767,7 +865,7 @@ x
 ---------- /out/entries/entry.css ----------
 /* src/entries/entry.css */
 div {
-  background: url(../image-LSAMBFUD.png);
+  background: url("../image-LSAMBFUD.png");
 }
 
 ================================================================================
@@ -803,6 +901,56 @@ var file_default = "This should not be base64 encoded";
 
 // entry.js
 console.log(file_default);
+
+================================================================================
+TestLoaderInlineSourceMapAbsolutePathIssue4075Unix
+---------- /out/entry.css.map ----------
+{
+  "version": 3,
+  "sources": ["src/styles1.scss", "src/styles2.scss"],
+  "sourcesContent": ["/* You can add global styles to this file, and also import other style files */\n* {\n  content: \"foo\"\n}\n", "/* You can add global styles to this file, and also import other style files */\n* {\n  content: \"bar\"\n}\n"],
+  "mappings": ";AACA;AACE,WAAS;;;;ACDX;AACE,WAAS;;",
+  "names": []
+}
+
+---------- /out/entry.css ----------
+/* home/user/project/src/styles1.css */
+* {
+  content: "foo";
+}
+
+/* home/user/project/src/styles2.css */
+* {
+  content: "bar";
+}
+
+/* home/user/project/src/entry.css */
+/*# sourceMappingURL=entry.css.map */
+
+================================================================================
+TestLoaderInlineSourceMapAbsolutePathIssue4075Windows
+---------- /out/entry.css.map ----------
+{
+  "version": 3,
+  "sources": ["src/styles1.scss", "src/styles2.scss"],
+  "sourcesContent": ["/* You can add global styles to this file, and also import other style files */\n* {\n  content: \"foo\"\n}\n", "/* You can add global styles to this file, and also import other style files */\n* {\n  content: \"bar\"\n}\n"],
+  "mappings": ";AACA;AACE,WAAS;;;;ACDX;AACE,WAAS;;",
+  "names": []
+}
+
+---------- /out/entry.css ----------
+/* home/user/project/src/styles1.css */
+* {
+  content: "foo";
+}
+
+/* home/user/project/src/styles2.css */
+* {
+  content: "bar";
+}
+
+/* home/user/project/src/entry.css */
+/*# sourceMappingURL=entry.css.map */
 
 ================================================================================
 TestLoaderJSONCommonJSAndES6
@@ -888,6 +1036,30 @@ TestLoaderJSONNoBundleIIFE
 })();
 
 ================================================================================
+TestLoaderJSONPrototype
+---------- /out.js ----------
+// data.json
+var data_default = {
+  "": "The property below should be converted to a computed property:",
+  ["__proto__"]: { foo: "bar" }
+};
+
+// entry.js
+console.log(data_default);
+
+================================================================================
+TestLoaderJSONPrototypeES5
+---------- /out.js ----------
+// data.json
+var data_default = {
+  "": "The property below should NOT be converted to a computed property for ES5:",
+  __proto__: { foo: "bar" }
+};
+
+// entry.js
+console.log(data_default);
+
+================================================================================
 TestLoaderJSONSharedWithMultipleEntriesIssue413
 ---------- /out/a.js ----------
 // data.json
@@ -919,6 +1091,18 @@ var y_default = "y";
 // entry.js
 var x_txt = require_x();
 console.log(x_txt, y_default);
+
+================================================================================
+TestLoaderTextUTF8BOM
+---------- /out.js ----------
+// data1.txt
+var data1_default = "text";
+
+// data2.txt
+var data2_default = "text\uFEFF";
+
+// entry.js
+console.log(data1_default, data2_default);
 
 ================================================================================
 TestRequireCustomExtensionBase64
@@ -978,3 +1162,35 @@ var require_test = __commonJS({
 
 // entry.js
 console.log(require_test());
+
+================================================================================
+TestWithTypeJSONOverrideLoader
+---------- /out.js ----------
+// foo.js
+var foo_default = { "this is json not js": true };
+
+// entry.js
+console.log(foo_default);
+
+================================================================================
+TestWithTypeJSONOverrideLoaderGlob
+---------- /out.js ----------
+// foo.js
+var foo_exports = {};
+__export(foo_exports, {
+  default: () => foo_default
+});
+var foo_default;
+var init_foo = __esm({
+  "foo.js"() {
+    foo_default = { "this is json not js": true };
+  }
+});
+
+// import("./foo*") in entry.js
+var globImport_foo = __glob({
+  "./foo.js": () => Promise.resolve().then(() => (init_foo(), foo_exports))
+});
+
+// entry.js
+globImport_foo("./foo" + bar).then(console.log);

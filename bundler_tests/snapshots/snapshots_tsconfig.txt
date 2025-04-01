@@ -14,7 +14,7 @@ var import_util = __toESM(require_util());
 console.log((0, import_util.default)());
 
 ================================================================================
-TestTsConfigAlwaysStrictTrueEmitDirectiveBundleCJS
+TestTsconfigAlwaysStrictTrueEmitDirectiveBundleCJS
 ---------- /Users/user/project/out/implicit.js ----------
 "use strict";
 
@@ -28,7 +28,7 @@ console.log('this file should start with "use strict"');
 console.log('this file should start with "use strict"');
 
 ================================================================================
-TestTsConfigAlwaysStrictTrueEmitDirectiveBundleESM
+TestTsconfigAlwaysStrictTrueEmitDirectiveBundleESM
 ---------- /Users/user/project/out/implicit.js ----------
 // Users/user/project/src/implicit.ts
 console.log('this file should not start with "use strict"');
@@ -38,7 +38,7 @@ console.log('this file should not start with "use strict"');
 console.log('this file should not start with "use strict"');
 
 ================================================================================
-TestTsConfigAlwaysStrictTrueEmitDirectiveBundleIIFE
+TestTsconfigAlwaysStrictTrueEmitDirectiveBundleIIFE
 ---------- /Users/user/project/out/implicit.js ----------
 "use strict";
 (() => {
@@ -54,7 +54,7 @@ TestTsConfigAlwaysStrictTrueEmitDirectiveBundleIIFE
 })();
 
 ================================================================================
-TestTsConfigAlwaysStrictTrueEmitDirectiveFormat
+TestTsconfigAlwaysStrictTrueEmitDirectiveFormat
 ---------- /Users/user/project/out/implicit.js ----------
 "use strict";
 console.log('this file should start with "use strict"');
@@ -64,7 +64,7 @@ console.log('this file should start with "use strict"');
 console.log('this file should start with "use strict"');
 
 ================================================================================
-TestTsConfigAlwaysStrictTrueEmitDirectivePassThrough
+TestTsconfigAlwaysStrictTrueEmitDirectivePassThrough
 ---------- /Users/user/project/out/implicit.js ----------
 "use strict";
 console.log('this file should start with "use strict"');
@@ -74,7 +74,7 @@ console.log('this file should start with "use strict"');
 console.log('this file should start with "use strict"');
 
 ================================================================================
-TestTsConfigBaseURLExtendsPaths
+TestTsconfigBaseURLExtendsPaths
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/lib/foo.ts
 var foo = 123;
@@ -83,12 +83,88 @@ var foo = 123;
 console.log(foo);
 
 ================================================================================
-TestTsConfigExtendsArray
+TestTsconfigDecoratorsUseDefineForClassFieldsFalse
+---------- /Users/user/project/out/entry.js ----------
+// Users/user/project/src/entry.ts
+var Class = class {
+};
+var ClassMethod = class {
+  foo() {
+  }
+};
+var ClassField = class {
+  constructor() {
+    this.foo = 123;
+  }
+};
+var ClassAccessor = class {
+  accessor foo = 123;
+  accessor bar;
+};
+new Class();
+new ClassMethod();
+new ClassField();
+new ClassAccessor();
+
+---------- /Users/user/project/out/entrywithdec.js ----------
+// Users/user/project/src/entrywithdec.ts
+var _Class_decorators, _init;
+_Class_decorators = [dec];
+var Class = class {
+};
+_init = __decoratorStart(null);
+Class = __decorateElement(_init, 0, "Class", _Class_decorators, Class);
+__runInitializers(_init, 1, Class);
+var _foo_dec, _init2;
+_foo_dec = [dec];
+var ClassMethod = class {
+  constructor() {
+    __runInitializers(_init2, 5, this);
+  }
+  foo() {
+  }
+};
+_init2 = __decoratorStart(null);
+__decorateElement(_init2, 1, "foo", _foo_dec, ClassMethod);
+__decoratorMetadata(_init2, ClassMethod);
+var _bar_dec, _foo_dec2, _init3;
+_foo_dec2 = [dec], _bar_dec = [dec];
+var ClassField = class {
+  constructor() {
+    this.foo = __runInitializers(_init3, 8, this, 123), __runInitializers(_init3, 11, this);
+    this.bar = __runInitializers(_init3, 12, this), __runInitializers(_init3, 15, this);
+  }
+};
+_init3 = __decoratorStart(null);
+__decorateElement(_init3, 5, "foo", _foo_dec2, ClassField);
+__decorateElement(_init3, 5, "bar", _bar_dec, ClassField);
+__decoratorMetadata(_init3, ClassField);
+var _bar_dec2, _foo_dec3, _init4, _foo, _bar;
+_foo_dec3 = [dec], _bar_dec2 = [dec];
+var ClassAccessor = class {
+  constructor() {
+    __privateAdd(this, _foo, __runInitializers(_init4, 8, this, 123)), __runInitializers(_init4, 11, this);
+    __privateAdd(this, _bar, __runInitializers(_init4, 12, this)), __runInitializers(_init4, 15, this);
+  }
+};
+_init4 = __decoratorStart(null);
+_foo = new WeakMap();
+_bar = new WeakMap();
+__decorateElement(_init4, 4, "foo", _foo_dec3, ClassAccessor, _foo);
+__decorateElement(_init4, 4, "bar", _bar_dec2, ClassAccessor, _bar);
+__decoratorMetadata(_init4, ClassAccessor);
+new Class();
+new ClassMethod();
+new ClassField();
+new ClassAccessor();
+
+================================================================================
+TestTsconfigExtendsArray
 ---------- /Users/user/project/out/main.js ----------
 console.log(/* @__PURE__ */ h(frag, null, /* @__PURE__ */ h("div", null)));
 
 ================================================================================
-TestTsConfigExtendsArrayNested
+TestTsconfigExtendsArrayNested
 ---------- /Users/user/project/out/main.js ----------
 import { foo } from "foo";
 export class Foo {
@@ -98,55 +174,55 @@ export class Foo {
 }
 
 ================================================================================
-TestTsConfigExtendsDotDotWithSlash
+TestTsconfigExtendsDotDotWithSlash
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ React.createElement("div", null));
 
 ================================================================================
-TestTsConfigExtendsDotDotWithoutSlash
+TestTsconfigExtendsDotDotWithoutSlash
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ success("div", null));
 
 ================================================================================
-TestTsConfigExtendsDotWithSlash
+TestTsconfigExtendsDotWithSlash
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ React.createElement("div", null));
 
 ================================================================================
-TestTsConfigExtendsDotWithoutSlash
+TestTsconfigExtendsDotWithoutSlash
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ success("div", null));
 
 ================================================================================
-TestTsConfigExtendsWithExports
+TestTsconfigExtendsWithExports
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ success("div", null));
 
 ================================================================================
-TestTsConfigExtendsWithExportsRequire
+TestTsconfigExtendsWithExportsRequire
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ success("div", null));
 
 ================================================================================
-TestTsConfigExtendsWithExportsStar
+TestTsconfigExtendsWithExportsStar
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ success("div", null));
 
 ================================================================================
-TestTsConfigExtendsWithExportsStarTrailing
+TestTsconfigExtendsWithExportsStarTrailing
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/src/main.tsx
 console.log(/* @__PURE__ */ success("div", null));
 
 ================================================================================
-TestTsConfigIgnoreInsideNodeModules
+TestTsconfigIgnoreInsideNodeModules
 ---------- /Users/user/project/out/main.js ----------
 // Users/user/project/node_modules/pkg/index.js
 var foo = "foo";
@@ -163,23 +239,246 @@ var foo3 = "shimFoo";
 var bar3 = "shimBar";
 
 // Users/user/project/src/main.ts
-if (foo2 !== "foo")
-  throw "fail: foo";
-if (bar2 !== "bar")
-  throw "fail: bar";
-if (foo3 !== "shimFoo")
-  throw "fail: shimFoo";
-if (bar3 !== "shimBar")
-  throw "fail: shimBar";
+if (foo2 !== "foo") throw "fail: foo";
+if (bar2 !== "bar") throw "fail: bar";
+if (foo3 !== "shimFoo") throw "fail: shimFoo";
+if (bar3 !== "shimBar") throw "fail: shimBar";
 
 ================================================================================
-TestTsConfigJSX
+TestTsconfigIgnoredTargetSilent
+---------- /Users/user/project/out.js ----------
+
+================================================================================
+TestTsconfigImportsNotUsedAsValuesPreserve
+---------- /Users/user/project/out.js ----------
+import "./foo";
+import "./foo";
+import "./foo";
+console.log(1, 2, 3);
+
+================================================================================
+TestTsconfigJSX
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/entry.tsx
 console.log(/* @__PURE__ */ R.c(R.F, null, /* @__PURE__ */ R.c("div", null), /* @__PURE__ */ R.c("div", null)));
 
 ================================================================================
-TestTsConfigNestedJSX
+TestTsconfigJsonAbsoluteBaseUrl
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/lib/util.js
+var require_util = __commonJS({
+  "Users/user/project/src/lib/util.js"(exports, module) {
+    module.exports = function() {
+      return 123;
+    };
+  }
+});
+
+// Users/user/project/src/app/entry.js
+var import_util = __toESM(require_util());
+console.log((0, import_util.default)());
+
+================================================================================
+TestTsconfigJsonAsteriskNameCollisionIssue3354
+---------- /Users/user/project/out.js ----------
+// web/bar/foo/foo.ts
+function foo() {
+  console.log("bar/foo");
+}
+
+// web/foo.ts
+function foo2() {
+  console.log("web/foo");
+  foo();
+}
+
+// entry.ts
+foo2();
+
+================================================================================
+TestTsconfigJsonBaseUrl
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/lib/util.js
+var require_util = __commonJS({
+  "Users/user/project/src/lib/util.js"(exports, module) {
+    module.exports = function() {
+      return 123;
+    };
+  }
+});
+
+// Users/user/project/src/app/entry.js
+var import_util = __toESM(require_util());
+console.log((0, import_util.default)());
+
+================================================================================
+TestTsconfigJsonBaseUrlIssue3307
+---------- /Users/user/project/out.js ----------
+// test.ts
+var foo = "well, this is correct...";
+export {
+  foo
+};
+
+================================================================================
+TestTsconfigJsonCommentAllowed
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/lib/util.js
+var require_util = __commonJS({
+  "Users/user/project/src/lib/util.js"(exports, module) {
+    module.exports = function() {
+      return 123;
+    };
+  }
+});
+
+// Users/user/project/src/app/entry.js
+var import_util = __toESM(require_util());
+console.log((0, import_util.default)());
+
+================================================================================
+TestTsconfigJsonConfigDirBaseURL
+---------- /Users/user/project/out.js ----------
+// Users/user/project/lib/foo/bar
+console.log("works");
+
+================================================================================
+TestTsconfigJsonConfigDirBaseURLInheritedPaths
+---------- /Users/user/project/out.js ----------
+// Users/user/project/lib/foo/bar
+console.log("works");
+
+================================================================================
+TestTsconfigJsonConfigDirPaths
+---------- /Users/user/project/out.js ----------
+// Users/user/project/lib/foo/bar
+console.log("works");
+
+================================================================================
+TestTsconfigJsonExtends
+---------- /out.js ----------
+// entry.jsx
+console.log(/* @__PURE__ */ baseFactory("div", null), /* @__PURE__ */ baseFactory(derivedFragment, null));
+
+================================================================================
+TestTsconfigJsonExtendsAbsolute
+---------- /out.js ----------
+// Users/user/project/entry.jsx
+console.log(/* @__PURE__ */ baseFactory("div", null), /* @__PURE__ */ baseFactory(derivedFragment, null));
+
+================================================================================
+TestTsconfigJsonExtendsArrayIssue3898
+---------- /Users/user/project/out.js ----------
+import {} from "MUST_KEEP";
+console.log(SUCCESS(WORKS, null, SUCCESS("div", null)));
+
+================================================================================
+TestTsconfigJsonExtendsLoop
+---------- /out.js ----------
+// entry.js
+console.log(123);
+
+================================================================================
+TestTsconfigJsonExtendsPackage
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/app/entry.jsx
+console.log(/* @__PURE__ */ worked("div", null));
+
+================================================================================
+TestTsconfigJsonExtendsThreeLevels
+---------- /out.js ----------
+// Users/user/project/src/path2/works/import.js
+console.log("works");
+
+// Users/user/project/src/entry.jsx
+console.log(/* @__PURE__ */ baseFactory("div", null), /* @__PURE__ */ baseFactory(derivedFragment, null));
+
+================================================================================
+TestTsconfigJsonInsideNodeModules
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/node_modules/foo/index.tsx
+console.log(/* @__PURE__ */ React.createElement("div", null));
+
+================================================================================
+TestTsconfigJsonNodeModulesImplicitFile
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/app/entry.tsx
+console.log(/* @__PURE__ */ worked("div", null));
+
+================================================================================
+TestTsconfigJsonNodeModulesTsconfigPathBad
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/app/entry.tsx
+console.log(/* @__PURE__ */ React.createElement("div", null));
+
+================================================================================
+TestTsconfigJsonNodeModulesTsconfigPathDirectory
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/app/entry.tsx
+console.log(/* @__PURE__ */ worked("div", null));
+
+================================================================================
+TestTsconfigJsonNodeModulesTsconfigPathExact
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/app/entry.tsx
+console.log(/* @__PURE__ */ worked("div", null));
+
+================================================================================
+TestTsconfigJsonNodeModulesTsconfigPathImplicitJson
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/app/entry.tsx
+console.log(/* @__PURE__ */ worked("div", null));
+
+================================================================================
+TestTsconfigJsonOverrideMissing
+---------- /Users/user/project/out.js ----------
+// Users/user/project/other/foo-good.ts
+console.log("good");
+
+================================================================================
+TestTsconfigJsonOverrideNodeModules
+---------- /Users/user/project/out.js ----------
+// Users/user/project/other/foo-good.ts
+console.log("good");
+
+================================================================================
+TestTsconfigJsonPackagesExternal
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/entry.js
+import truePkg from "pkg1";
+
+// Users/user/project/src/stuff/pkg2.js
+var pkg2_default = success;
+
+// Users/user/project/src/entry.js
+truePkg();
+pkg2_default();
+
+================================================================================
+TestTsconfigJsonTopLevelMistakeWarning
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/entry.ts
+var Foo = @foo class {
+};
+
+================================================================================
+TestTsconfigJsonTrailingCommaAllowed
+---------- /Users/user/project/out.js ----------
+// Users/user/project/src/lib/util.js
+var require_util = __commonJS({
+  "Users/user/project/src/lib/util.js"(exports, module) {
+    module.exports = function() {
+      return 123;
+    };
+  }
+});
+
+// Users/user/project/src/app/entry.js
+var import_util = __toESM(require_util());
+console.log((0, import_util.default)());
+
+================================================================================
+TestTsconfigNestedJSX
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/factory/index.tsx
 var factory_default = /* @__PURE__ */ h(React.Fragment, null, /* @__PURE__ */ h("div", null), /* @__PURE__ */ h("div", null));
@@ -194,7 +493,13 @@ var both_default = /* @__PURE__ */ R.c(R.F, null, /* @__PURE__ */ R.c("div", nul
 console.log(factory_default, fragment_default, both_default);
 
 ================================================================================
-TestTsConfigPaths
+TestTsconfigPackageJsonExportsYarnPnP
+---------- /Users/user/project/out.js ----------
+// packages/app/index.tsx
+console.log(/* @__PURE__ */ success("div", null));
+
+================================================================================
+TestTsconfigPaths
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/baseurl_dot/test0-success.ts
 var test0_success_default = "test0-success";
@@ -270,7 +575,7 @@ var baseurl_nested_default = {
 console.log(baseurl_dot_default, baseurl_nested_default);
 
 ================================================================================
-TestTsConfigPathsExtendsBaseURL
+TestTsconfigPathsExtendsBaseURL
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/base/test/lib/foo.ts
 var foo = 123;
@@ -279,7 +584,7 @@ var foo = 123;
 console.log(foo);
 
 ================================================================================
-TestTsConfigPathsInNodeModulesIssue2386
+TestTsconfigPathsInNodeModulesIssue2386
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/node_modules/wow/dist/first.js
 var first_default = "dist";
@@ -291,7 +596,7 @@ var next_default = first_default;
 console.log(first_default, next_default);
 
 ================================================================================
-TestTsConfigPathsNoBaseURL
+TestTsconfigPathsNoBaseURL
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/simple/test0-success.ts
 var test0_success_default = "test0-success";
@@ -361,7 +666,7 @@ var extended_default = {
 console.log(simple_default, extended_default);
 
 ================================================================================
-TestTsConfigPathsOverriddenBaseURL
+TestTsconfigPathsOverriddenBaseURL
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/src/test.ts
 var test_default = 123;
@@ -370,7 +675,7 @@ var test_default = 123;
 console.log(test_default);
 
 ================================================================================
-TestTsConfigPathsOverriddenBaseURLDifferentDir
+TestTsconfigPathsOverriddenBaseURLDifferentDir
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/src/test.ts
 var test_default = 123;
@@ -379,7 +684,7 @@ var test_default = 123;
 console.log(test_default);
 
 ================================================================================
-TestTsConfigPathsTypeOnly
+TestTsconfigPathsTypeOnly
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/node_modules/fib/index.js
 function fib(input) {
@@ -393,13 +698,13 @@ function fib(input) {
 console.log(fib(10));
 
 ================================================================================
-TestTsConfigPreserveJSX
+TestTsconfigPreserveJSX
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/entry.tsx
 console.log(/* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", null), /* @__PURE__ */ React.createElement("div", null)));
 
 ================================================================================
-TestTsConfigPreserveJSXAutomatic
+TestTsconfigPreserveJSXAutomatic
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/entry.tsx
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
@@ -407,234 +712,6 @@ console.log(/* @__PURE__ */ jsxs(Fragment, { children: [
   /* @__PURE__ */ jsx("div", {}),
   /* @__PURE__ */ jsx("div", {})
 ] }));
-
-================================================================================
-TestTsConfigReactJSX
----------- /Users/user/project/out.js ----------
-// Users/user/project/entry.tsx
-import { Fragment, jsx, jsxs } from "notreact/jsx-runtime";
-console.log(/* @__PURE__ */ jsxs(Fragment, { children: [
-  /* @__PURE__ */ jsx("div", {}),
-  /* @__PURE__ */ jsx("div", {})
-] }));
-
-================================================================================
-TestTsConfigReactJSXDev
----------- /Users/user/project/out.js ----------
-// Users/user/project/entry.tsx
-import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
-console.log(/* @__PURE__ */ jsxDEV(Fragment, { children: [
-  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
-    fileName: "Users/user/project/entry.tsx",
-    lineNumber: 2,
-    columnNumber: 19
-  }, this),
-  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
-    fileName: "Users/user/project/entry.tsx",
-    lineNumber: 2,
-    columnNumber: 25
-  }, this)
-] }, void 0, true, {
-  fileName: "Users/user/project/entry.tsx",
-  lineNumber: 2,
-  columnNumber: 17
-}, this));
-
-================================================================================
-TestTsConfigReactJSXWithDevInMainConfig
----------- /Users/user/project/out.js ----------
-// Users/user/project/entry.tsx
-import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
-console.log(/* @__PURE__ */ jsxDEV(Fragment, { children: [
-  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
-    fileName: "Users/user/project/entry.tsx",
-    lineNumber: 2,
-    columnNumber: 19
-  }, this),
-  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
-    fileName: "Users/user/project/entry.tsx",
-    lineNumber: 2,
-    columnNumber: 25
-  }, this)
-] }, void 0, true, {
-  fileName: "Users/user/project/entry.tsx",
-  lineNumber: 2,
-  columnNumber: 17
-}, this));
-
-================================================================================
-TestTsConfigVerbatimModuleSyntaxFalse
----------- /Users/user/project/out/main.js ----------
-export { Car } from "./car";
-
-================================================================================
-TestTsConfigVerbatimModuleSyntaxTrue
----------- /Users/user/project/out/main.js ----------
-export { Car } from "./car";
-import {} from "./car";
-export {} from "./car";
-import { b } from "bcd";
-import {} from "xyz";
-
-================================================================================
-TestTsConfigWithStatementAlwaysStrictFalse
----------- /Users/user/project/out.js ----------
-(() => {
-  // Users/user/project/src/entry.ts
-  with (x)
-    y;
-})();
-
-================================================================================
-TestTsConfigWithStatementStrictFalse
----------- /Users/user/project/out.js ----------
-(() => {
-  // Users/user/project/src/entry.ts
-  with (x)
-    y;
-})();
-
-================================================================================
-TestTsConfigWithStatementStrictTrueAlwaysStrictFalse
----------- /Users/user/project/out.js ----------
-(() => {
-  // Users/user/project/src/entry.ts
-  with (x)
-    y;
-})();
-
-================================================================================
-TestTsconfigIgnoredTargetSilent
----------- /Users/user/project/out.js ----------
-
-================================================================================
-TestTsconfigImportsNotUsedAsValuesPreserve
----------- /Users/user/project/out.js ----------
-import "./foo";
-import "./foo";
-import "./foo";
-console.log(1, 2, 3);
-
-================================================================================
-TestTsconfigJsonAbsoluteBaseUrl
----------- /Users/user/project/out.js ----------
-// Users/user/project/src/lib/util.js
-var require_util = __commonJS({
-  "Users/user/project/src/lib/util.js"(exports, module) {
-    module.exports = function() {
-      return 123;
-    };
-  }
-});
-
-// Users/user/project/src/app/entry.js
-var import_util = __toESM(require_util());
-console.log((0, import_util.default)());
-
-================================================================================
-TestTsconfigJsonBaseUrl
----------- /Users/user/project/out.js ----------
-// Users/user/project/src/lib/util.js
-var require_util = __commonJS({
-  "Users/user/project/src/lib/util.js"(exports, module) {
-    module.exports = function() {
-      return 123;
-    };
-  }
-});
-
-// Users/user/project/src/app/entry.js
-var import_util = __toESM(require_util());
-console.log((0, import_util.default)());
-
-================================================================================
-TestTsconfigJsonCommentAllowed
----------- /Users/user/project/out.js ----------
-// Users/user/project/src/lib/util.js
-var require_util = __commonJS({
-  "Users/user/project/src/lib/util.js"(exports, module) {
-    module.exports = function() {
-      return 123;
-    };
-  }
-});
-
-// Users/user/project/src/app/entry.js
-var import_util = __toESM(require_util());
-console.log((0, import_util.default)());
-
-================================================================================
-TestTsconfigJsonExtends
----------- /out.js ----------
-// entry.jsx
-console.log(/* @__PURE__ */ baseFactory("div", null), /* @__PURE__ */ baseFactory(derivedFragment, null));
-
-================================================================================
-TestTsconfigJsonExtendsAbsolute
----------- /out.js ----------
-// Users/user/project/entry.jsx
-console.log(/* @__PURE__ */ baseFactory("div", null), /* @__PURE__ */ baseFactory(derivedFragment, null));
-
-================================================================================
-TestTsconfigJsonExtendsLoop
----------- /out.js ----------
-// entry.js
-console.log(123);
-
-================================================================================
-TestTsconfigJsonExtendsPackage
----------- /Users/user/project/out.js ----------
-// Users/user/project/src/app/entry.jsx
-console.log(/* @__PURE__ */ worked("div", null));
-
-================================================================================
-TestTsconfigJsonExtendsThreeLevels
----------- /out.js ----------
-// Users/user/project/src/path2/works/import.js
-console.log("works");
-
-// Users/user/project/src/entry.jsx
-console.log(/* @__PURE__ */ baseFactory("div", null), /* @__PURE__ */ baseFactory(derivedFragment, null));
-
-================================================================================
-TestTsconfigJsonInsideNodeModules
----------- /Users/user/project/out.js ----------
-// Users/user/project/src/node_modules/foo/index.tsx
-console.log(/* @__PURE__ */ React.createElement("div", null));
-
-================================================================================
-TestTsconfigJsonNodeModulesImplicitFile
----------- /Users/user/project/out.js ----------
-// Users/user/project/src/app/entry.tsx
-console.log(/* @__PURE__ */ worked("div", null));
-
-================================================================================
-TestTsconfigJsonOverrideMissing
----------- /Users/user/project/out.js ----------
-// Users/user/project/other/foo-good.ts
-console.log("good");
-
-================================================================================
-TestTsconfigJsonOverrideNodeModules
----------- /Users/user/project/out.js ----------
-// Users/user/project/other/foo-good.ts
-console.log("good");
-
-================================================================================
-TestTsconfigJsonTrailingCommaAllowed
----------- /Users/user/project/out.js ----------
-// Users/user/project/src/lib/util.js
-var require_util = __commonJS({
-  "Users/user/project/src/lib/util.js"(exports, module) {
-    module.exports = function() {
-      return 123;
-    };
-  }
-});
-
-// Users/user/project/src/app/entry.js
-var import_util = __toESM(require_util());
-console.log((0, import_util.default)());
 
 ================================================================================
 TestTsconfigPreserveUnusedImports
@@ -670,10 +747,70 @@ import * as i1 from "i";
 import "j";
 
 ================================================================================
+TestTsconfigReactJSX
+---------- /Users/user/project/out.js ----------
+// Users/user/project/entry.tsx
+import { Fragment, jsx, jsxs } from "notreact/jsx-runtime";
+console.log(/* @__PURE__ */ jsxs(Fragment, { children: [
+  /* @__PURE__ */ jsx("div", {}),
+  /* @__PURE__ */ jsx("div", {})
+] }));
+
+================================================================================
+TestTsconfigReactJSXDev
+---------- /Users/user/project/out.js ----------
+// Users/user/project/entry.tsx
+import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
+console.log(/* @__PURE__ */ jsxDEV(Fragment, { children: [
+  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "Users/user/project/entry.tsx",
+    lineNumber: 2,
+    columnNumber: 19
+  }),
+  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "Users/user/project/entry.tsx",
+    lineNumber: 2,
+    columnNumber: 25
+  })
+] }, void 0, true, {
+  fileName: "Users/user/project/entry.tsx",
+  lineNumber: 2,
+  columnNumber: 17
+}));
+
+================================================================================
+TestTsconfigReactJSXWithDevInMainConfig
+---------- /Users/user/project/out.js ----------
+// Users/user/project/entry.tsx
+import { Fragment, jsxDEV } from "react/jsx-dev-runtime";
+console.log(/* @__PURE__ */ jsxDEV(Fragment, { children: [
+  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "Users/user/project/entry.tsx",
+    lineNumber: 2,
+    columnNumber: 19
+  }),
+  /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "Users/user/project/entry.tsx",
+    lineNumber: 2,
+    columnNumber: 25
+  })
+] }, void 0, true, {
+  fileName: "Users/user/project/entry.tsx",
+  lineNumber: 2,
+  columnNumber: 17
+}));
+
+================================================================================
 TestTsconfigRemoveUnusedImports
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/src/entry.ts
 console.log(1);
+
+================================================================================
+TestTsconfigStackOverflowYarnPnP
+---------- /Users/user/project/out.js ----------
+// entry.jsx
+console.log(/* @__PURE__ */ success("div", null));
 
 ================================================================================
 TestTsconfigUnrecognizedTargetWarning
@@ -698,5 +835,43 @@ Foo = class {
 };
 
 ================================================================================
+TestTsconfigVerbatimModuleSyntaxFalse
+---------- /Users/user/project/out/main.js ----------
+export { Car } from "./car";
+
+================================================================================
+TestTsconfigVerbatimModuleSyntaxTrue
+---------- /Users/user/project/out/main.js ----------
+export { Car } from "./car";
+import {} from "./car";
+export {} from "./car";
+import { b } from "bcd";
+import {} from "xyz";
+
+================================================================================
 TestTsconfigWarningsInsideNodeModules
 ---------- /Users/user/project/out.js ----------
+
+================================================================================
+TestTsconfigWithStatementAlwaysStrictFalse
+---------- /Users/user/project/out.js ----------
+(() => {
+  // Users/user/project/src/entry.ts
+  with (x) y;
+})();
+
+================================================================================
+TestTsconfigWithStatementStrictFalse
+---------- /Users/user/project/out.js ----------
+(() => {
+  // Users/user/project/src/entry.ts
+  with (x) y;
+})();
+
+================================================================================
+TestTsconfigWithStatementStrictTrueAlwaysStrictFalse
+---------- /Users/user/project/out.js ----------
+(() => {
+  // Users/user/project/src/entry.ts
+  with (x) y;
+})();

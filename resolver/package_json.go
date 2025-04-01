@@ -21,6 +21,14 @@ type packageJSON struct {
 	mainFields     map[string]mainField
 	moduleTypeData js_ast.ModuleTypeData
 
+	// "TypeScript will first check whether package.json contains a "tsconfig"
+	// field, and if it does, TypeScript will try to load a configuration file
+	// from that field. If neither exists, TypeScript will try to read from a
+	// tsconfig.json at the root."
+	//
+	// See: https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-2.html#tsconfigjson-inheritance-via-nodejs-packages
+	tsconfig string
+
 	// Present if the "browser" field is present. This field is intended to be
 	// used by bundlers and lets you redirect the paths of certain 3rd-party
 	// modules that don't work in the browser to other modules that shim that
@@ -320,6 +328,13 @@ func (r resolverQuery) parsePackageJSON(inputPath string) *packageJSON {
 		} else {
 			r.log.AddID(logger.MsgID_PackageJSON_InvalidType, logger.Warning, &tracker, logger.Range{Loc: typeJSON.Loc},
 				"The value for \"type\" must be a string")
+		}
+	}
+
+	// Read the "tsconfig" field
+	if tsconfigJSON, _, ok := getProperty(json, "tsconfig"); ok {
+		if tsconfigValue, ok := getString(tsconfigJSON); ok {
+			packageJSON.tsconfig = tsconfigValue
 		}
 	}
 
@@ -660,6 +675,16 @@ func parseImportsExportsMap(source logger.Source, log logger.Log, json js_ast.Ex
 			firstToken := logger.Range{Loc: expr.Loc, Len: 1}
 			isConditionalSugar := false
 
+			type DeadCondition struct {
+				reason string
+				ranges []logger.Range
+				notes  []logger.MsgData
+			}
+			var foundDefault logger.Range
+			var foundImport logger.Range
+			var foundRequire logger.Range
+			var deadCondition DeadCondition
+
 			for i, property := range e.Properties {
 				keyStr, _ := property.Key.Data.(*js_ast.EString)
 				key := helpers.UTF16ToString(keyStr.Value)
@@ -682,6 +707,35 @@ func parseImportsExportsMap(source logger.Source, log logger.Log, json js_ast.Ex
 					}
 				}
 
+				// Track "dead" conditional branches that can never be reached
+				if foundDefault.Len != 0 || (foundImport.Len != 0 && foundRequire.Len != 0) {
+					deadCondition.ranges = append(deadCondition.ranges, keyRange)
+					// Note: Don't warn about the "default" condition as it's supposed to be a catch-all condition
+					if deadCondition.reason == "" && key != "default" {
+						if foundDefault.Len != 0 {
+							deadCondition.reason = "\"default\""
+							deadCondition.notes = []logger.MsgData{
+								tracker.MsgData(foundDefault, "The \"default\" condition comes earlier and will always be chosen:"),
+							}
+						} else {
+							deadCondition.reason = "both \"import\" and \"require\""
+							deadCondition.notes = []logger.MsgData{
+								tracker.MsgData(foundImport, "The \"import\" condition comes earlier and will be used for all \"import\" statements:"),
+								tracker.MsgData(foundRequire, "The \"require\" condition comes earlier and will be used for all \"require\" calls:"),
+							}
+						}
+					}
+				} else {
+					switch key {
+					case "default":
+						foundDefault = keyRange
+					case "import":
+						foundImport = keyRange
+					case "require":
+						foundRequire = keyRange
+					}
+				}
+
 				entry := pjMapEntry{
 					key:      key,
 					keyRange: keyRange,
@@ -699,6 +753,30 @@ func parseImportsExportsMap(source logger.Source, log logger.Log, json js_ast.Ex
 			// or containing only a single "*", sorted by the sorting function
 			// PATTERN_KEY_COMPARE which orders in descending order of specificity.
 			sort.Stable(expansionKeys)
+
+			// Warn about "dead" conditional branches that can never be reached
+			if deadCondition.reason != "" {
+				kind := logger.Warning
+				if helpers.IsInsideNodeModules(source.KeyPath.Text) {
+					kind = logger.Debug
+				}
+				var conditions string
+				conditionWord := "condition"
+				itComesWord := "it comes"
+				if len(deadCondition.ranges) > 1 {
+					conditionWord = "conditions"
+					itComesWord = "they come"
+				}
+				for i, r := range deadCondition.ranges {
+					if i > 0 {
+						conditions += " and "
+					}
+					conditions += source.TextForRange(r)
+				}
+				log.AddIDWithNotes(logger.MsgID_PackageJSON_DeadCondition, kind, &tracker, deadCondition.ranges[0],
+					fmt.Sprintf("The %s %s here will never be used as %s after %s", conditionWord, conditions, itComesWord, deadCondition.reason),
+					deadCondition.notes)
+			}
 
 			return pjEntry{
 				kind:          pjObject,
@@ -793,6 +871,9 @@ type pjDebug struct {
 
 	// This is the range of the token to use for error messages
 	token logger.Range
+
+	// If true, the token is a "null" literal
+	isBecauseOfNullLiteral bool
 }
 
 func (r resolverQuery) esmHandlePostConditions(
@@ -877,6 +958,7 @@ func (r resolverQuery) esmPackageExportsResolve(
 		return "", pjStatusInvalidPackageConfiguration, pjDebug{token: exports.firstToken}
 	}
 
+	debugToReturn := pjDebug{token: exports.firstToken}
 	if subpath == "." {
 		mainExport := pjEntry{kind: pjNull}
 		if exports.kind == pjString || exports.kind == pjArray || (exports.kind == pjObject && !exports.keysStartWithDot()) {
@@ -893,19 +975,23 @@ func (r resolverQuery) esmPackageExportsResolve(
 			resolved, status, debug := r.esmPackageTargetResolve(packageURL, mainExport, "", false, false, conditions)
 			if status != pjStatusNull && status != pjStatusUndefined {
 				return resolved, status, debug
+			} else {
+				debugToReturn = debug
 			}
 		}
 	} else if exports.kind == pjObject && exports.keysStartWithDot() {
 		resolved, status, debug := r.esmPackageImportsExportsResolve(subpath, exports, packageURL, false, conditions)
 		if status != pjStatusNull && status != pjStatusUndefined {
 			return resolved, status, debug
+		} else {
+			debugToReturn = debug
 		}
 	}
 
 	if r.debugLogs != nil {
 		r.debugLogs.addNote(fmt.Sprintf("The path %q is not exported", subpath))
 	}
-	return "", pjStatusPackagePathNotExported, pjDebug{token: exports.firstToken}
+	return "", pjStatusPackagePathNotExported, debugToReturn
 }
 
 func (r resolverQuery) esmPackageImportsExportsResolve(
@@ -1160,14 +1246,14 @@ func (r resolverQuery) esmPackageTargetResolve(
 				//
 				// We want the warning to say this:
 				//
-				//   note: None of the conditions provided ("require") match any of the
+				//   note: None of the conditions in the package definition ("require") match any of the
 				//         currently active conditions ("default", "import", "node")
 				//   14 |       "node": {
 				//      |               ^
 				//
 				// We don't want the warning to say this:
 				//
-				//   note: None of the conditions provided ("browser", "electron", "node")
+				//   note: None of the conditions in the package definition ("browser", "electron", "node")
 				//         match any of the currently active conditions ("default", "import", "node")
 				//   7 |   "exports": {
 				//     |              ^
@@ -1222,7 +1308,7 @@ func (r resolverQuery) esmPackageTargetResolve(
 		if r.debugLogs != nil {
 			r.debugLogs.addNote(fmt.Sprintf("The path %q is set to null", subpath))
 		}
-		return "", pjStatusNull, pjDebug{token: target.firstToken}
+		return "", pjStatusNull, pjDebug{token: target.firstToken, isBecauseOfNullLiteral: true}
 	}
 
 	if r.debugLogs != nil {
@@ -1353,7 +1439,6 @@ func (r resolverQuery) esmPackageTargetReverseResolve(
 					return true, keyWithoutTrailingStar + starData, target.firstToken
 				}
 			}
-			break
 		}
 
 	case pjObject:

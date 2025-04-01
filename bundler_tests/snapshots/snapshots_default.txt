@@ -300,7 +300,6 @@ export {
 ================================================================================
 TestCommentPreservation
 ---------- /out/entry.js ----------
-// entry.js
 console.log(
   import(
     /* before */
@@ -393,54 +392,54 @@ console.log(
     /* after */
   )
 );
-var [
+let [
   /* foo */
 ] = [
   /* bar */
 ];
-var [
+let [
   // foo
 ] = [
   // bar
 ];
-var [
+let [
   /*before*/
   ...s
 ] = [
   /*before*/
   ...s
 ];
-var [.../*before*/
+let [.../*before*/
 s2] = [.../*before*/
 s2];
-var {
+let {
   /* foo */
 } = {
   /* bar */
 };
-var {
+let {
   // foo
 } = {
   // bar
 };
-var {
+let {
   /*before*/
   ...s3
 } = {
   /*before*/
   ...s3
 };
-var { .../*before*/
+let { .../*before*/
 s4 } = { .../*before*/
 s4 };
-var [
+let [
   /* before */
   x
 ] = [
   /* before */
   x
 ];
-var [
+let [
   /* before */
   x2
   /* after */
@@ -449,7 +448,7 @@ var [
   x2
   /* after */
 ];
-var [
+let [
   // before
   x3
   // after
@@ -458,14 +457,14 @@ var [
   x3
   // after
 ];
-var {
+let {
   /* before */
   y
 } = {
   /* before */
   y
 };
-var {
+let {
   /* before */
   y2
   /* after */
@@ -474,7 +473,7 @@ var {
   y2
   /* after */
 };
-var {
+let {
   // before
   y3
   // after
@@ -483,21 +482,21 @@ var {
   y3
   // after
 };
-var {
+let {
   /* before */
   [y4]: y4
 } = {
   /* before */
   [y4]: y4
 };
-var { [
+let { [
   /* before */
   y5
 ]: y5 } = { [
   /* before */
   y5
 ]: y5 };
-var { [
+let { [
   y6
   /* after */
 ]: y6 } = { [
@@ -599,58 +598,48 @@ for (
   /*foo*/
   a;
   ;
-)
-  ;
+) ;
 for (
   ;
   /*foo*/
   a;
-)
-  ;
+) ;
 for (
   ;
   ;
   /*foo*/
   a
-)
-  ;
+) ;
 for (
   /*foo*/
   a in b
-)
-  ;
+) ;
 for (
   a in
   /*foo*/
   b
-)
-  ;
+) ;
 for (
   /*foo*/
   a of b
-)
-  ;
+) ;
 for (
   a of
   /*foo*/
   b
-)
-  ;
+) ;
 if (
   /*foo*/
   a
-)
-  ;
+) ;
 with (
   /*foo*/
   a
-)
-  ;
+) ;
 while (
   /*foo*/
   a
-)
-  ;
+) ;
 do {
 } while (
   /*foo*/
@@ -712,48 +701,24 @@ console.log(
     x
   }</>,
   // Comments on absent AST nodes
-  <div>
-    {"before"}
-    {}
-    {"after"}
-  </div>,
-  <div>
-    {"before"}
-    {
-      /* comment 1 */
-      /* comment 2 */
-    }
-    {"after"}
-  </div>,
-  <div>
-    {"before"}
-    {
-      // comment 1
-      // comment 2
-    }
-    {"after"}
-  </div>,
-  <>
-    {"before"}
-    {}
-    {"after"}
-  </>,
-  <>
-    {"before"}
-    {
-      /* comment 1 */
-      /* comment 2 */
-    }
-    {"after"}
-  </>,
-  <>
-    {"before"}
-    {
-      // comment 1
-      // comment 2
-    }
-    {"after"}
-  </>
+  <div>before{}after</div>,
+  <div>before{
+    /* comment 1 */
+    /* comment 2 */
+  }after</div>,
+  <div>before{
+    // comment 1
+    // comment 2
+  }after</div>,
+  <>before{}after</>,
+  <>before{
+    /* comment 1 */
+    /* comment 2 */
+  }after</>,
+  <>before{
+    // comment 1
+    // comment 2
+  }after</>
 );
 
 ================================================================================
@@ -884,24 +849,18 @@ TestConstWithLet
 console.log(1);
 console.log(2);
 unknownFn(3);
-for (let c = x; ; )
-  console.log(c);
-for (let d in x)
-  console.log(d);
-for (let e of x)
-  console.log(e);
+for (let c = x; ; ) console.log(c);
+for (let d in x) console.log(d);
+for (let e of x) console.log(e);
 
 ================================================================================
 TestConstWithLetNoBundle
 ---------- /out.js ----------
 const a = 1;
 console.log(1), console.log(2), unknownFn(3);
-for (const c = x; ; )
-  console.log(c);
-for (const d in x)
-  console.log(d);
-for (const e of x)
-  console.log(e);
+for (const c = x; ; ) console.log(c);
+for (const d in x) console.log(d);
+for (const e of x) console.log(e);
 
 ================================================================================
 TestConstWithLetNoMangle
@@ -913,12 +872,81 @@ if (true) {
   const b = 2;
   console.log(b);
 }
-for (const c = x; ; )
-  console.log(c);
-for (const d in x)
-  console.log(d);
-for (const e of x)
-  console.log(e);
+for (const c = x; ; ) console.log(c);
+for (const d in x) console.log(d);
+for (const e of x) console.log(e);
+
+================================================================================
+TestDecoratorPrintingCJS
+---------- /out.js ----------
+// entry.js
+var import_somewhere = require("somewhere");
+_ = class {
+  #bar;
+  classes = [
+    class {
+      @import_somewhere.imported @((0, import_somewhere.imported)()) imported;
+    },
+    class {
+      @unbound @unbound() unbound;
+    },
+    class {
+      @(123) @(123()) constant;
+    },
+    class {
+      @(void 0) @((void 0)()) undef;
+    },
+    class {
+      @(element[access]) indexed;
+    },
+    class {
+      @foo.#bar private;
+    },
+    class {
+      @(foo["ヿ"]) unicode;
+    },
+    class {
+      @(() => {
+      }) arrow;
+    }
+  ];
+};
+
+================================================================================
+TestDecoratorPrintingESM
+---------- /out.js ----------
+// entry.js
+import { imported } from "somewhere";
+_ = class {
+  #bar;
+  classes = [
+    class {
+      @imported @imported() imported;
+    },
+    class {
+      @unbound @unbound() unbound;
+    },
+    class {
+      @(123) @(123()) constant;
+    },
+    class {
+      @(void 0) @((void 0)()) undef;
+    },
+    class {
+      @(element[access]) indexed;
+    },
+    class {
+      @foo.#bar private;
+    },
+    class {
+      @(foo["ヿ"]) unicode;
+    },
+    class {
+      @(() => {
+      }) arrow;
+    }
+  ];
+};
 
 ================================================================================
 TestDefineAssignWarning
@@ -1009,6 +1037,42 @@ console.log([
   a == null ? void 0 : a[b][c],
   (_a = a[b]) == null ? void 0 : _a[c]
 ]);
+
+================================================================================
+TestDefineOptionalChainPanicIssue3551
+---------- /out/id-define.js ----------
+// id-define.js
+1?.y.z;
+(1?.y).z;
+1?.y["z"];
+(1?.y)["z"];
+1?.y();
+(1?.y)();
+1?.y.z();
+(1?.y).z();
+1?.y["z"]();
+(1?.y)["z"]();
+delete 1?.y.z;
+delete (1?.y).z;
+delete 1?.y["z"];
+delete (1?.y)["z"];
+
+---------- /out/dot-define.js ----------
+// dot-define.js
+1 .c;
+1 .c;
+1["c"];
+1["c"];
+1();
+1();
+1 .c();
+1 .c();
+1["c"]();
+1["c"]();
+delete 1 .c;
+delete 1 .c;
+delete 1["c"];
+delete 1["c"];
 
 ================================================================================
 TestDefineThis
@@ -1170,13 +1234,13 @@ console.log((init_types(), __toCommonJS(types_exports)));
 
 ================================================================================
 TestEntryNamesChunkNamesExtPlaceholder
----------- /out/main/js/entry1-L7KI5G7A.js ----------
+---------- /out/main/js/entry1-4X3SO762.js ----------
 import "../../common/js/chunk-XHGYOYUR.js";
 
 // src/entries/entry1.js
 console.log("entry1");
 
----------- /out/main/js/entry2-KTHKWVT2.js ----------
+---------- /out/main/js/entry2-URQRHZS5.js ----------
 import "../../common/js/chunk-XHGYOYUR.js";
 
 // src/entries/entry2.js
@@ -2134,6 +2198,25 @@ console.log(
 );
 
 ================================================================================
+TestInjectWithStringExportNameBundle
+---------- /out.js ----------
+// inject.js
+var old = console.log;
+var fn = (...args) => old.apply(console, ["log:"].concat(args));
+
+// entry.js
+fn(test);
+fn(test);
+fn(test);
+
+================================================================================
+TestInjectWithStringExportNameNoBundle
+---------- /out.js ----------
+var old = console.log;
+var fn = (...args) => old.apply(console, ["log:"].concat(args));
+fn(test);
+
+================================================================================
 TestJSXAutomaticImportsCommonJS
 ---------- /out.js ----------
 // custom-react.js
@@ -2190,6 +2273,226 @@ console.log(/* @__PURE__ */ React.createElement("[", null));
 
 // string-template.jsx
 console.log(/* @__PURE__ */ React.createElement("]", null));
+
+================================================================================
+TestJSXDevSelfEdgeCases
+---------- /out/class-this.js ----------
+// class-this.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = class {
+  foo() {
+    return /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+      fileName: "class-this.jsx",
+      lineNumber: 1,
+      columnNumber: 35
+    }, this);
+  }
+};
+export {
+  Foo
+};
+
+---------- /out/derived-constructor-arg.js ----------
+// derived-constructor-arg.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = class extends Object {
+  constructor(foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "derived-constructor-arg.jsx",
+    lineNumber: 1,
+    columnNumber: 53
+  })) {
+    super();
+  }
+};
+export {
+  Foo
+};
+
+---------- /out/derived-constructor-field.js ----------
+// derived-constructor-field.tsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = class extends Object {
+  constructor() {
+    super(...arguments);
+    this.foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+      fileName: "derived-constructor-field.tsx",
+      lineNumber: 1,
+      columnNumber: 41
+    }, this);
+  }
+};
+export {
+  Foo
+};
+
+---------- /out/derived-constructor.js ----------
+// derived-constructor.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = class extends Object {
+  constructor() {
+    super(/* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+      fileName: "derived-constructor.jsx",
+      lineNumber: 1,
+      columnNumber: 57
+    }));
+    this.foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+      fileName: "derived-constructor.jsx",
+      lineNumber: 1,
+      columnNumber: 77
+    });
+  }
+};
+export {
+  Foo
+};
+
+---------- /out/function-this.js ----------
+// function-this.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+function Foo() {
+  return /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "function-this.jsx",
+    lineNumber: 1,
+    columnNumber: 32
+  }, this);
+}
+export {
+  Foo
+};
+
+---------- /out/normal-constructor-arg.js ----------
+// normal-constructor-arg.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = class {
+  constructor(foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "normal-constructor-arg.jsx",
+    lineNumber: 1,
+    columnNumber: 38
+  }, this)) {
+  }
+};
+export {
+  Foo
+};
+
+---------- /out/normal-constructor-field.js ----------
+// normal-constructor-field.tsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = class {
+  constructor() {
+    this.foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+      fileName: "normal-constructor-field.tsx",
+      lineNumber: 1,
+      columnNumber: 26
+    }, this);
+  }
+};
+export {
+  Foo
+};
+
+---------- /out/normal-constructor.js ----------
+// normal-constructor.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = class {
+  constructor() {
+    this.foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+      fileName: "normal-constructor.jsx",
+      lineNumber: 1,
+      columnNumber: 47
+    }, this);
+  }
+};
+export {
+  Foo
+};
+
+---------- /out/static-field.js ----------
+// static-field.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var _Foo = class _Foo {
+};
+__publicField(_Foo, "foo", /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+  fileName: "static-field.jsx",
+  lineNumber: 1,
+  columnNumber: 33
+}, _Foo));
+var Foo = _Foo;
+export {
+  Foo
+};
+
+---------- /out/top-level-this-cjs.js ----------
+// top-level-this-cjs.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var require_top_level_this_cjs = __commonJS({
+  "top-level-this-cjs.jsx"(exports) {
+    exports.foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+      fileName: "top-level-this-cjs.jsx",
+      lineNumber: 1,
+      columnNumber: 15
+    });
+  }
+});
+export default require_top_level_this_cjs();
+
+---------- /out/top-level-this-esm.js ----------
+// top-level-this-esm.jsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+  fileName: "top-level-this-esm.jsx",
+  lineNumber: 1,
+  columnNumber: 18
+});
+if (Foo) {
+  foo = /* @__PURE__ */ jsxDEV(Foo, { children: "nested top-level this" }, void 0, false, {
+    fileName: "top-level-this-esm.jsx",
+    lineNumber: 1,
+    columnNumber: 43
+  });
+}
+export {
+  foo
+};
+
+---------- /out/tsconfig.js ----------
+// tsconfig.json
+var compilerOptions = { useDefineForClassFields: false };
+var tsconfig_default = { compilerOptions };
+export {
+  compilerOptions,
+  tsconfig_default as default
+};
+
+---------- /out/typescript-enum.js ----------
+// typescript-enum.tsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo = /* @__PURE__ */ ((Foo2) => {
+  Foo2[Foo2["foo"] = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "typescript-enum.tsx",
+    lineNumber: 1,
+    columnNumber: 25
+  })] = "foo";
+  return Foo2;
+})(Foo || {});
+export {
+  Foo
+};
+
+---------- /out/typescript-namespace.js ----------
+// typescript-namespace.tsx
+import { jsxDEV } from "react/jsx-dev-runtime";
+var Foo;
+((Foo2) => {
+  Foo2.foo = /* @__PURE__ */ jsxDEV("div", {}, void 0, false, {
+    fileName: "typescript-namespace.tsx",
+    lineNumber: 1,
+    columnNumber: 41
+  });
+})(Foo || (Foo = {}));
+export {
+  Foo
+};
 
 ================================================================================
 TestJSXImportMetaProperty
@@ -2404,6 +2707,265 @@ console.log([
 };
 
 ================================================================================
+TestKeepNamesAllForms
+---------- /out/keep.js ----------
+function fn() {
+}
+__name(fn, "fn");
+function foo(fn2 = function() {
+}) {
+}
+__name(foo, "foo");
+var fn = /* @__PURE__ */ __name(function() {
+}, "fn");
+var obj = { "f n": /* @__PURE__ */ __name(function() {
+}, "f n") };
+class Foo0 {
+  static {
+    __name(this, "Foo0");
+  }
+  "f n" = /* @__PURE__ */ __name(function() {
+  }, "f n");
+}
+class Foo1 {
+  static {
+    __name(this, "Foo1");
+  }
+  static "f n" = /* @__PURE__ */ __name(function() {
+  }, "f n");
+}
+class Foo2 {
+  static {
+    __name(this, "Foo2");
+  }
+  accessor "f n" = /* @__PURE__ */ __name(function() {
+  }, "f n");
+}
+class Foo3 {
+  static {
+    __name(this, "Foo3");
+  }
+  static accessor "f n" = /* @__PURE__ */ __name(function() {
+  }, "f n");
+}
+class Foo4 {
+  static {
+    __name(this, "Foo4");
+  }
+  #fn = /* @__PURE__ */ __name(function() {
+  }, "#fn");
+}
+class Foo5 {
+  static {
+    __name(this, "Foo5");
+  }
+  static #fn = /* @__PURE__ */ __name(function() {
+  }, "#fn");
+}
+class Foo6 {
+  static {
+    __name(this, "Foo6");
+  }
+  accessor #fn = /* @__PURE__ */ __name(function() {
+  }, "#fn");
+}
+class Foo7 {
+  static {
+    __name(this, "Foo7");
+  }
+  static accessor #fn = /* @__PURE__ */ __name(function() {
+  }, "#fn");
+}
+fn = /* @__PURE__ */ __name(function() {
+}, "fn");
+fn ||= /* @__PURE__ */ __name(function() {
+}, "fn");
+fn &&= /* @__PURE__ */ __name(function() {
+}, "fn");
+fn ??= /* @__PURE__ */ __name(function() {
+}, "fn");
+var [fn = /* @__PURE__ */ __name(function() {
+}, "fn")] = [];
+var { fn = /* @__PURE__ */ __name(function() {
+}, "fn") } = {};
+for (var [fn = /* @__PURE__ */ __name(function() {
+}, "fn")] = []; ; ) ;
+for (var { fn = /* @__PURE__ */ __name(function() {
+}, "fn") } = {}; ; ) ;
+for (var [fn = /* @__PURE__ */ __name(function() {
+}, "fn")] in obj) ;
+for (var { fn = /* @__PURE__ */ __name(function() {
+}, "fn") } in obj) ;
+for (var [fn = /* @__PURE__ */ __name(function() {
+}, "fn")] of obj) ;
+for (var { fn = /* @__PURE__ */ __name(function() {
+}, "fn") } of obj) ;
+function foo([fn2 = /* @__PURE__ */ __name(function() {
+}, "fn")]) {
+}
+__name(foo, "foo");
+function foo({ fn: fn2 = /* @__PURE__ */ __name(function() {
+}, "fn") }) {
+}
+__name(foo, "foo");
+[fn = /* @__PURE__ */ __name(function() {
+}, "fn")] = [];
+({ fn = /* @__PURE__ */ __name(function() {
+}, "fn") } = {});
+
+---------- /out/do-not-keep.js ----------
+class Foo0 {
+  static {
+    __name(this, "Foo0");
+  }
+  fn() {
+  }
+}
+class Foo1 {
+  static {
+    __name(this, "Foo1");
+  }
+  *fn() {
+  }
+}
+class Foo2 {
+  static {
+    __name(this, "Foo2");
+  }
+  get fn() {
+  }
+}
+class Foo3 {
+  static {
+    __name(this, "Foo3");
+  }
+  set fn(_) {
+  }
+}
+class Foo4 {
+  static {
+    __name(this, "Foo4");
+  }
+  async fn() {
+  }
+}
+class Foo5 {
+  static {
+    __name(this, "Foo5");
+  }
+  static fn() {
+  }
+}
+class Foo6 {
+  static {
+    __name(this, "Foo6");
+  }
+  static *fn() {
+  }
+}
+class Foo7 {
+  static {
+    __name(this, "Foo7");
+  }
+  static get fn() {
+  }
+}
+class Foo8 {
+  static {
+    __name(this, "Foo8");
+  }
+  static set fn(_) {
+  }
+}
+class Foo9 {
+  static {
+    __name(this, "Foo9");
+  }
+  static async fn() {
+  }
+}
+class Bar0 {
+  static {
+    __name(this, "Bar0");
+  }
+  #fn() {
+  }
+}
+class Bar1 {
+  static {
+    __name(this, "Bar1");
+  }
+  *#fn() {
+  }
+}
+class Bar2 {
+  static {
+    __name(this, "Bar2");
+  }
+  get #fn() {
+  }
+}
+class Bar3 {
+  static {
+    __name(this, "Bar3");
+  }
+  set #fn(_) {
+  }
+}
+class Bar4 {
+  static {
+    __name(this, "Bar4");
+  }
+  async #fn() {
+  }
+}
+class Bar5 {
+  static {
+    __name(this, "Bar5");
+  }
+  static #fn() {
+  }
+}
+class Bar6 {
+  static {
+    __name(this, "Bar6");
+  }
+  static *#fn() {
+  }
+}
+class Bar7 {
+  static {
+    __name(this, "Bar7");
+  }
+  static get #fn() {
+  }
+}
+class Bar8 {
+  static {
+    __name(this, "Bar8");
+  }
+  static set #fn(_) {
+  }
+}
+class Bar9 {
+  static {
+    __name(this, "Bar9");
+  }
+  static async #fn(_) {
+  }
+}
+const Baz0 = { fn() {
+} };
+const Baz1 = { *fn() {
+} };
+const Baz2 = { get fn() {
+} };
+const Baz3 = { set fn(_) {
+} };
+const Baz4 = { async fn() {
+} };
+
+================================================================================
 TestKeepNamesClassStaticName
 ---------- /out.js ----------
 class A {
@@ -2592,6 +3154,11 @@ c {
 /*! Copyright notice 1 */
 /*! Copyright notice 2 */
 
+---------- /out/empty.js ----------
+
+---------- /out/empty.css ----------
+/* empty.css */
+
 ================================================================================
 TestLegalCommentsEscapeSlashScriptAndStyleEndOfFile
 ---------- /out/entry.js ----------
@@ -2674,6 +3241,11 @@ c {
 
 /* entry.css */
 
+---------- /out/empty.js ----------
+
+---------- /out/empty.css ----------
+/* empty.css */
+
 ================================================================================
 TestLegalCommentsInline
 ---------- /out/entry.js ----------
@@ -2709,6 +3281,11 @@ c {
 /*! Copyright notice 2 */
 
 /* entry.css */
+
+---------- /out/empty.js ----------
+
+---------- /out/empty.css ----------
+/* empty.css */
 
 ================================================================================
 TestLegalCommentsLinked
@@ -2749,6 +3326,11 @@ c {
 
 /* entry.css */
 /*! For license information please see entry.css.LEGAL.txt */
+
+---------- /out/empty.js ----------
+
+---------- /out/empty.css ----------
+/* empty.css */
 
 ================================================================================
 TestLegalCommentsManyEndOfFile
@@ -2938,6 +3520,11 @@ c {
 
 /* entry.css */
 
+---------- /out/empty.js ----------
+
+---------- /out/empty.css ----------
+/* empty.css */
+
 ================================================================================
 TestLineLimitMinified
 ---------- /out/script.js ----------
@@ -2979,8 +3566,24 @@ BzdHJva2U9IiMxOTE5MTkiIHN0cm9rZS\
 
 ================================================================================
 TestLineLimitNotMinified
+---------- /out/x-TZ25B4WH.file ----------
+...file...
+---------- /out/x-UF3O47Y3.copy ----------
+...copy...
 ---------- /out/script.js ----------
-export const SignUpForm = (props) => {
+// x.file
+var x_default = "./x-TZ25B4WH.file";
+
+// script.jsx
+import copyURL from "./x-UF3O47Y3.copy";
+
+// x.data
+var x_default2 = "data:text/plai\
+n;charset=utf-8,...lots of long \
+data...lots of long data...";
+
+// script.jsx
+var SignUpForm = (props) => {
   return /* @__PURE__ */ React.createElement(
   "p", { class: "signup" }, /* @__PURE__ */ React.
   createElement("label", null, "\
@@ -2998,10 +3601,19 @@ led" }, props.buttonText), /* @__PURE__ */ React.
 By signing up, you are agreeing \
 to our ", /* @__PURE__ */ React.
   createElement("a", { href: "/t\
-os/" }, "terms of service"), "."));
+os/" }, "terms of service"), "."),
+  /* @__PURE__ */ React.createElement(
+  "img", { src: x_default }), /* @__PURE__ */ React.
+  createElement("img", { src: copyURL }),
+  /* @__PURE__ */ React.createElement(
+  "img", { src: x_default2 }));
+};
+export {
+  SignUpForm
 };
 
 ---------- /out/style.css ----------
+/* style.css */
 body.light-mode.new-user-segment:not(.logged-in)
 .signup,
 body.light-mode.new-user-segment:not(.logged-in)
@@ -3027,6 +3639,11 @@ tNjAtOTVMMTU1IDEwMGwtNDcuNSA0Ny4\
 1IiBmaWxsPSJub25lIiBzdHJva2U9IiM\
 xOTE5MTkiIHN0cm9rZS13aWR0aD0iMjQ\
 iLz4KPC9zdmc+Cg==");
+  cursor: url("./x-TZ25B4WH.file");
+  cursor: url("./x-UF3O47Y3.copy");
+  cursor: url("data:text/plain;c\
+harset=utf-8,...lots of long dat\
+a...lots of long data...");
 }
 
 ================================================================================
@@ -3253,8 +3870,8 @@ x = class {
   b: 2,
   _doNotMangleThis: 3
 }, x.a = 1, x.b = 2, x._doNotMangleThis = 3, x([
-  "foo.a = bar.b",
-  "foo.notMangled = bar.notMangledEither"
+  `${foo}.a = bar.b`,
+  `${foo}.notMangled = bar.notMangledEither`
 ]);
 
 ================================================================================
@@ -3267,10 +3884,10 @@ TestManglePropsLoweredClassFields
 ---------- /out.js ----------
 class Foo {
   constructor() {
-    __publicField(this, "a", 123);
+    __publicField(this, /* @__KEY__ */ "a", 123);
   }
 }
-__publicField(Foo, "b", 234);
+__publicField(Foo, /* @__KEY__ */ "b", 234);
 Foo.b = new Foo().a;
 
 ================================================================================
@@ -3804,6 +4421,78 @@ var shared_default = 123;
 console.log(shared_default);
 
 ================================================================================
+TestMetafileImportWithTypeJSON
+---------- /out/entry.js ----------
+// project/data.json
+var data_default = { some: "data" };
+
+// project/data.json with { type: 'json' }
+var data_default2 = { some: "data" };
+
+// project/entry.js
+x = [data_default, data_default, data_default2];
+---------- metafile.json ----------
+{
+  "inputs": {
+    "project/data.json": {
+      "bytes": 16,
+      "imports": []
+    },
+    "project/data.json with { type: 'json' }": {
+      "bytes": 16,
+      "imports": [],
+      "format": "esm",
+      "with": {
+        "type": "json"
+      }
+    },
+    "project/entry.js": {
+      "bytes": 164,
+      "imports": [
+        {
+          "path": "project/data.json",
+          "kind": "import-statement",
+          "original": "./data.json"
+        },
+        {
+          "path": "project/data.json",
+          "kind": "import-statement",
+          "original": "./data.json"
+        },
+        {
+          "path": "project/data.json with { type: 'json' }",
+          "kind": "import-statement",
+          "original": "./data.json",
+          "with": {
+            "type": "json"
+          }
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "outputs": {
+    "out/entry.js": {
+      "imports": [],
+      "exports": [],
+      "entryPoint": "project/entry.js",
+      "inputs": {
+        "project/data.json": {
+          "bytesInOutput": 37
+        },
+        "project/data.json with { type: 'json' }": {
+          "bytesInOutput": 38
+        },
+        "project/entry.js": {
+          "bytesInOutput": 49
+        }
+      },
+      "bytes": 210
+    }
+  }
+}
+
+================================================================================
 TestMetafileNoBundle
 ---------- /out/entry.js ----------
 import a from "pkg";
@@ -3923,7 +4612,7 @@ copy
 import {
   __commonJS,
   __require
-} from "./chunk-O3JHV3KG.js";
+} from "./chunk-MQN2VSL5.js";
 
 // project/cjs.js
 var require_cjs = __commonJS({
@@ -3954,15 +4643,15 @@ console.log(
   e,
   __require("extern-cjs"),
   require_cjs(),
-  import("./dynamic-3QRP4J6Z.js")
+  import("./dynamic-Q2DWDUFV.js")
 );
 var exported;
 export {
   exported
 };
 
----------- /out/dynamic-3QRP4J6Z.js ----------
-import "./chunk-O3JHV3KG.js";
+---------- /out/dynamic-Q2DWDUFV.js ----------
+import "./chunk-MQN2VSL5.js";
 
 // project/dynamic.js
 var dynamic_default = 5;
@@ -3970,7 +4659,7 @@ export {
   dynamic_default as default
 };
 
----------- /out/chunk-O3JHV3KG.js ----------
+---------- /out/chunk-MQN2VSL5.js ----------
 export {
   __require,
   __commonJS
@@ -3984,10 +4673,10 @@ a {
   background: url(data:image/svg+xml,<svg/>);
 }
 b {
-  background: url(./file-NVISQQTV.file);
+  background: url("./file-NVISQQTV.file");
 }
 c {
-  background: url(./copy-O3Y5SCJE.copy);
+  background: url("./copy-O3Y5SCJE.copy");
 }
 d {
   background: url(extern.png);
@@ -4127,7 +4816,7 @@ d {
     "out/entry.js": {
       "imports": [
         {
-          "path": "out/chunk-O3JHV3KG.js",
+          "path": "out/chunk-MQN2VSL5.js",
           "kind": "import-statement"
         },
         {
@@ -4149,7 +4838,7 @@ d {
           "external": true
         },
         {
-          "path": "out/dynamic-3QRP4J6Z.js",
+          "path": "out/dynamic-Q2DWDUFV.js",
           "kind": "dynamic-import"
         }
       ],
@@ -4176,10 +4865,10 @@ d {
       },
       "bytes": 642
     },
-    "out/dynamic-3QRP4J6Z.js": {
+    "out/dynamic-Q2DWDUFV.js": {
       "imports": [
         {
-          "path": "out/chunk-O3JHV3KG.js",
+          "path": "out/chunk-MQN2VSL5.js",
           "kind": "import-statement"
         }
       ],
@@ -4194,7 +4883,7 @@ d {
       },
       "bytes": 119
     },
-    "out/chunk-O3JHV3KG.js": {
+    "out/chunk-MQN2VSL5.js": {
       "imports": [],
       "exports": [
         "__commonJS",
@@ -4231,10 +4920,10 @@ d {
       "entryPoint": "project/entry.css",
       "inputs": {
         "project/entry.css": {
-          "bytesInOutput": 183
+          "bytesInOutput": 187
         }
       },
-      "bytes": 230
+      "bytes": 234
     }
   }
 }
@@ -4268,7 +4957,7 @@ import("./3333333333333333333333333333333333333333333333333333333333333333333333
 ---------- /out/bytesInOutput should be at least 99.css ----------
 /* project/bytesInOutput should be at least 99.css */
 a {
-  background: url(./444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444-55DNWN2R.file);
+  background: url("./444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444-55DNWN2R.file");
 }
 ---------- metafile.json ----------
 {
@@ -4435,10 +5124,10 @@ a {
       "entryPoint": "project/bytesInOutput should be at least 99.css",
       "inputs": {
         "project/bytesInOutput should be at least 99.css": {
-          "bytesInOutput": 142
+          "bytesInOutput": 144
         }
       },
-      "bytes": 196
+      "bytes": 198
     }
   }
 }
@@ -4536,31 +5225,28 @@ var i=r((t,e)=>{e.exports=123});var s=i();console.log(s,"no identifier in this f
 ================================================================================
 TestMinifyNestedLabelsNoBundle
 ---------- /out.js ----------
-n:l:a:b:c:d:e:f:g:h:i:j:k:m:o:p:{nl(`
-`);q:r:s:t:u:v:w:x:y:z:A:{B:C:D:E:F:{nl(`
+l:n:a:b:c:d:e:f:g:h:i:j:k:m:o:p:{nl(`
+`);q:r:s:t:u:v:w:x:y:z:A:B:C:D:E:F:{nl(`
 `);G:H:I:J:K:L:M:N:O:P:Q:R:S:T:U:V:{nl(`
-`);W:X:Y:Z:_:$:nn:ln:an:bn:cn:dn:en:fn:gn:hn:{nl(`
-`);jn:kn:mn:on:pn:qn:rn:sn:tn:un:vn:wn:xn:yn:zn:An:{nl(`
-`);Bn:Cn:Dn:En:Fn:Gn:Hn:In:Jn:Kn:Ln:Mn:Nn:On:Pn:Qn:{nl(`
-`);Rn:Sn:Tn:Un:Vn:Wn:Xn:Yn:Zn:_n:$n:nl:ll:al:bl:cl:{nl(`
-`);dl:el:fl:gl:hl:il:jl:kl:ml:ol:pl:{ql:rl:sl:tl:ul:{nl(`
-`);vl:wl:xl:yl:zl:Al:Bl:Cl:Dl:El:Fl:Gl:Hl:Il:Jl:Kl:{nl(`
-`);Ll:Ml:Nl:Ol:Pl:Ql:Rl:Sl:Tl:Ul:Vl:Wl:Xl:Yl:Zl:_l:{nl(`
-`);$l:na:la:aa:ba:ca:da:ea:fa:ga:ha:ia:ja:ka:ma:oa:{nl(`
+`);W:X:Y:Z:_:$:ll:nl:al:bl:cl:dl:el:fl:gl:hl:{nl(`
+`);il:jl:kl:ml:ol:pl:ql:rl:sl:tl:ul:vl:wl:xl:yl:zl:{nl(`
+`);Al:Bl:Cl:Dl:El:Fl:Gl:Hl:Il:Jl:Kl:Ll:Ml:Nl:Ol:Pl:{nl(`
+`);Ql:Rl:Sl:Tl:Ul:Vl:Wl:Xl:Yl:Zl:_l:$l:ln:nn:an:bn:{nl(`
+`);cn:dn:en:fn:gn:hn:jn:kn:mn:on:pn:qn:rn:sn:tn:un:{nl(`
+`);vn:wn:xn:yn:zn:An:Bn:Cn:Dn:En:Fn:Gn:Hn:In:Jn:Kn:{nl(`
+`);Ln:Mn:Nn:On:Pn:Qn:Rn:Sn:Tn:Un:Vn:Wn:Xn:Yn:Zn:_n:{nl(`
+`);$n:la:na:aa:ba:ca:da:ea:fa:ga:ha:ia:ja:ka:ma:oa:{nl(`
 `);pa:qa:ra:sa:ta:ua:va:wa:xa:ya:za:Aa:Ba:Ca:Da:Ea:{nl(`
 `);Fa:Ga:Ha:Ia:Ja:Ka:La:Ma:Na:Oa:Pa:Qa:Ra:Sa:Ta:Ua:{nl(`
-`);Va:Wa:Xa:Ya:Za:_a:$a:nb:lb:ab:bb:{cb:db:eb:fb:gb:{nl(`
+`);Va:Wa:Xa:Ya:Za:_a:$a:lb:nb:ab:bb:cb:db:eb:fb:gb:{nl(`
 `);hb:ib:jb:kb:mb:ob:pb:qb:rb:sb:tb:ub:vb:wb:xb:yb:{nl(`
 `);zb:Ab:Bb:Cb:Db:Eb:Fb:Gb:Hb:Ib:Jb:Kb:Lb:Mb:Nb:Ob:{nl(`
-`);Pb:Qb:Rb:Sb:Tb:Ub:Vb:Wb:Xb:Yb:Zb:_b:$b:nc:lc:ac:{nl(`
+`);Pb:Qb:Rb:Sb:Tb:Ub:Vb:Wb:Xb:Yb:Zb:_b:$b:lc:nc:ac:{nl(`
 `);bc:cc:dc:ec:fc:gc:hc:ic:jc:kc:mc:oc:pc:qc:rc:sc:{nl(`
 `);tc:uc:vc:wc:xc:yc:zc:Ac:Bc:Cc:Dc:Ec:Fc:Gc:Hc:Ic:{nl(`
-`);Jc:Kc:Lc:Mc:Nc:Oc:Pc:Qc:Rc:Sc:Tc:{Uc:Vc:Wc:Xc:Yc:{nl(`
-`);Zc:_c:$c:nd:ld:ad:bd:cd:dd:ed:fd:gd:hd:;}nl(`
-`)}}}}}}}nl(`
-`)}}}}}}}nl(`
-`)}}}}}}}nl(`
-`)}}
+`);Jc:Kc:Lc:Mc:Nc:Oc:Pc:Qc:Rc:Sc:Tc:Uc:Vc:Wc:Xc:Yc:{nl(`
+`);Zc:_c:$c:ld:nd:ad:bd:cd:dd:ed:fd:gd:hd:{}}}}}}}}}}}}}}}}}}nl(`
+`)}}}
 
 ================================================================================
 TestMinifyPrivateIdentifiersNoBundle
@@ -4595,22 +5281,19 @@ TestMinifySiblingLabelsNoBundle
 ---------- /out.js ----------
 a: {
   b: {
-    if (x)
-      break b;
+    if (x) break b;
     break a;
   }
 }
 a: {
   b: {
-    if (x)
-      break b;
+    if (x) break b;
     break a;
   }
 }
 a: {
   b: {
-    if (x)
-      break b;
+    if (x) break b;
     break a;
   }
 }
@@ -4731,6 +5414,45 @@ module.exports = foo;
 console.log(module, exports);
 
 ================================================================================
+TestNodeAnnotationFalsePositiveIssue3544
+---------- /out.js ----------
+// entry.mjs
+var entry_exports = {};
+__export(entry_exports, {
+  confuseNode: () => confuseNode
+});
+module.exports = __toCommonJS(entry_exports);
+function confuseNode(exports2) {
+  exports2.notAnExport = function() {
+  };
+}
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  confuseNode
+});
+
+================================================================================
+TestNodeAnnotationInvalidIdentifierIssue4100
+---------- /out.js ----------
+// entry.mjs
+var entry_exports = {};
+__export(entry_exports, {
+  "...": () => baz,
+  foo: () => foo,
+  if: () => bar
+});
+module.exports = __toCommonJS(entry_exports);
+var foo;
+var bar;
+var baz;
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  "...": null,
+  foo,
+  if: null
+});
+
+================================================================================
 TestNodeModules
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/node_modules/demo-pkg/index.js
@@ -4766,6 +5488,108 @@ function i(o, e) {
 export {
   i as aap
 };
+
+================================================================================
+TestObjectLiteralProtoSetterEdgeCases
+---------- /out/import-normal.js ----------
+import { __proto__, bar } from "foo";
+function foo() {
+  console.log(
+    'this must not become "{ __proto__ }":',
+    {
+      __proto__: __proto__,
+      bar
+    }
+  );
+}
+
+---------- /out/import-shorthand.js ----------
+import { __proto__, bar } from "foo";
+function foo() {
+  console.log(
+    'this must not become "{ __proto__: ... }":',
+    {
+      __proto__,
+      bar
+    }
+  );
+}
+
+---------- /out/local-normal.js ----------
+function foo(__proto__, bar) {
+  console.log(
+    'this must not become "{ __proto__ }":',
+    {
+      __proto__: __proto__,
+      bar
+    }
+  );
+}
+
+---------- /out/local-shorthand.js ----------
+function foo(__proto__, bar) {
+  {
+    let __proto__2, bar2;
+    console.log(
+      'this must not become "{ __proto__: ... }":',
+      {
+        ["__proto__"]: __proto__2,
+        bar: bar2
+      }
+    );
+  }
+}
+
+================================================================================
+TestObjectLiteralProtoSetterEdgeCasesMinifySyntax
+---------- /out/import-computed.js ----------
+import { __proto__, bar } from "foo";
+function foo() {
+  console.log(
+    'this must not become "{ __proto__: ... }":',
+    {
+      ["__proto__"]: __proto__,
+      bar
+    }
+  );
+}
+
+---------- /out/import-normal.js ----------
+import { __proto__, bar } from "foo";
+function foo() {
+  console.log(
+    'this must not become "{ __proto__ }":',
+    {
+      __proto__: __proto__,
+      bar
+    }
+  );
+}
+
+---------- /out/local-computed.js ----------
+function foo(__proto__, bar) {
+  {
+    let __proto__2, bar2;
+    console.log(
+      'this must not become "{ __proto__: ... }":',
+      {
+        ["__proto__"]: __proto__2,
+        bar: bar2
+      }
+    );
+  }
+}
+
+---------- /out/local-normal.js ----------
+function foo(__proto__, bar) {
+  console.log(
+    'this must not become "{ __proto__ }":',
+    {
+      __proto__: __proto__,
+      bar
+    }
+  );
+}
 
 ================================================================================
 TestOutbase
@@ -4990,22 +5814,19 @@ TestRenameLabelsNoBundle
 ---------- /out.js ----------
 foo: {
   bar: {
-    if (x)
-      break bar;
+    if (x) break bar;
     break foo;
   }
 }
 foo2: {
   bar2: {
-    if (x)
-      break bar2;
+    if (x) break bar2;
     break foo2;
   }
 }
 foo: {
   bar: {
-    if (x)
-      break bar;
+    if (x) break bar;
     break foo;
   }
 }
@@ -5041,27 +5862,54 @@ class Bar {
 ================================================================================
 TestRequireAndDynamicImportInvalidTemplate
 ---------- /out.js ----------
-// entry.js
-__require(tag`./b`);
-__require(`./${b}`);
-try {
-  __require(tag`./b`);
-  __require(`./${b}`);
-} catch {
-}
-(async () => {
-  import(tag`./b`);
-  import(`./${b}`);
-  await import(tag`./b`);
-  await import(`./${b}`);
-  try {
-    import(tag`./b`);
-    import(`./${b}`);
-    await import(tag`./b`);
-    await import(`./${b}`);
-  } catch {
+// require("./**/*") in entry.js
+var globRequire;
+var init_ = __esm({
+  'require("./**/*") in entry.js'() {
+    globRequire = __glob({
+      "./entry.js": () => require_entry()
+    });
   }
-})();
+});
+
+// import("./**/*") in entry.js
+var globImport;
+var init_2 = __esm({
+  'import("./**/*") in entry.js'() {
+    globImport = __glob({
+      "./entry.js": () => Promise.resolve().then(() => __toESM(require_entry()))
+    });
+  }
+});
+
+// entry.js
+var require_entry = __commonJS({
+  "entry.js"() {
+    init_();
+    init_2();
+    __require(tag`./b`);
+    globRequire(`./${b}`);
+    try {
+      __require(tag`./b`);
+      globRequire(`./${b}`);
+    } catch {
+    }
+    (async () => {
+      import(tag`./b`);
+      globImport(`./${b}`);
+      await import(tag`./b`);
+      await globImport(`./${b}`);
+      try {
+        import(tag`./b`);
+        globImport(`./${b}`);
+        await import(tag`./b`);
+        await globImport(`./${b}`);
+      } catch {
+      }
+    })();
+  }
+});
+export default require_entry();
 
 ================================================================================
 TestRequireBadArgumentCount
@@ -5144,23 +5992,23 @@ console.log("cache:", require.cache);
 TestRequireParentDirCommonJS
 ---------- /out.js ----------
 // Users/user/project/src/index.js
-var require_src = __commonJS({
+var require_index = __commonJS({
   "Users/user/project/src/index.js"(exports, module) {
     module.exports = 123;
   }
 });
 
 // Users/user/project/src/dir/entry.js
-console.log(require_src());
+console.log(require_index());
 
 ================================================================================
 TestRequireParentDirES6
 ---------- /out.js ----------
 // Users/user/project/src/index.js
-var src_default = 123;
+var index_default = 123;
 
 // Users/user/project/src/dir/entry.js
-console.log(src_default);
+console.log(index_default);
 
 ================================================================================
 TestRequirePropertyAccessCommonJS
@@ -5346,6 +6194,85 @@ function fn() {
 console.log(fn());
 
 ================================================================================
+TestSourceIdentifierNameIndexMultipleEntry
+---------- /Users/user/project/out/home/index.js ----------
+// Users/user/project/node_modules/pkg/index.js
+var require_pkg = __commonJS({
+  "Users/user/project/node_modules/pkg/index.js"(exports) {
+    exports.pkg = true;
+  }
+});
+
+// Users/user/project/common/index.js
+var require_common = __commonJS({
+  "Users/user/project/common/index.js"(exports) {
+    exports.common = true;
+  }
+});
+
+// Users/user/project/home/index.js
+var require_home = __commonJS({
+  "Users/user/project/home/index.js"() {
+    require_home();
+    require_pkg();
+    require_common();
+  }
+});
+export default require_home();
+
+---------- /Users/user/project/out/about/index.js ----------
+// Users/user/project/node_modules/pkg/index.js
+var require_pkg = __commonJS({
+  "Users/user/project/node_modules/pkg/index.js"(exports) {
+    exports.pkg = true;
+  }
+});
+
+// Users/user/project/common/index.js
+var require_common = __commonJS({
+  "Users/user/project/common/index.js"(exports) {
+    exports.common = true;
+  }
+});
+
+// Users/user/project/about/index.js
+var require_about = __commonJS({
+  "Users/user/project/about/index.js"() {
+    require_about();
+    require_pkg();
+    require_common();
+  }
+});
+export default require_about();
+
+================================================================================
+TestSourceIdentifierNameIndexSingleEntry
+---------- /Users/user/project/out/index.js ----------
+// Users/user/project/node_modules/pkg/index.js
+var require_pkg = __commonJS({
+  "Users/user/project/node_modules/pkg/index.js"(exports) {
+    exports.pkg = true;
+  }
+});
+
+// Users/user/project/nested/index.js
+var require_nested = __commonJS({
+  "Users/user/project/nested/index.js"(exports) {
+    exports.nested = true;
+  }
+});
+
+// Users/user/project/index.js
+var require_index = __commonJS({
+  "Users/user/project/index.js"() {
+    require_index();
+    require_pkg();
+    require_nested();
+  }
+});
+export default require_index();
+
+================================================================================
 TestSourceMap
 ---------- /Users/user/project/out.js.map ----------
 {
@@ -5387,6 +6314,33 @@ export function outer() {
   }
 }
 __name(outer, "outer"), outer();
+
+================================================================================
+TestStringExportNamesCommonJS
+---------- /out.js ----------
+var entry_exports = {};
+__export(entry_exports, {
+  "all the stuff": () => all_the_stuff,
+  "some export": () => import_foo["some import"]
+});
+module.exports = __toCommonJS(entry_exports);
+var import_foo = require("./foo");
+var all_the_stuff = __toESM(require("./foo"));
+
+================================================================================
+TestStringExportNamesIIFE
+---------- /out.js ----------
+var global;
+(global ||= {}).name = (() => {
+  var entry_exports = {};
+  __export(entry_exports, {
+    "all the stuff": () => all_the_stuff,
+    "some export": () => import_foo["some import"]
+  });
+  var import_foo = require("./foo");
+  var all_the_stuff = __toESM(require("./foo"));
+  return __toCommonJS(entry_exports);
+})();
 
 ================================================================================
 TestSwitchScopeNoBundle
@@ -5847,29 +6801,22 @@ await init_entry();
 TestTopLevelAwaitCJSDeadBranch
 ---------- /out.js ----------
 // entry.js
-if (false)
-  foo;
-if (false)
-  for (foo of bar)
-    ;
+if (false) foo;
+if (false) for (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitESM
 ---------- /out.js ----------
 // entry.js
 await foo;
-for await (foo of bar)
-  ;
+for await (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitESMDeadBranch
 ---------- /out.js ----------
 // entry.js
-if (false)
-  await foo;
-if (false)
-  for await (foo of bar)
-    ;
+if (false) await foo;
+if (false) for await (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitForbiddenRequireDeadBranch
@@ -5879,9 +6826,7 @@ TestTopLevelAwaitForbiddenRequireDeadBranch
   var c_exports = {};
   var init_c = __esm({
     "c.js"() {
-      if (false)
-        for (let x of y)
-          ;
+      if (false) for (let x of y) ;
     }
   });
 
@@ -5909,9 +6854,7 @@ TestTopLevelAwaitForbiddenRequireDeadBranch
       init_b();
       init_c();
       init_entry();
-      if (false)
-        for (let x of y)
-          ;
+      if (false) for (let x of y) ;
     }
   });
   init_entry();
@@ -5922,63 +6865,46 @@ TestTopLevelAwaitIIFEDeadBranch
 ---------- /out.js ----------
 (() => {
   // entry.js
-  if (false)
-    foo;
-  if (false)
-    for (foo of bar)
-      ;
+  if (false) foo;
+  if (false) for (foo of bar) ;
 })();
 
 ================================================================================
 TestTopLevelAwaitNoBundle
 ---------- /out.js ----------
 await foo;
-for await (foo of bar)
-  ;
+for await (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitNoBundleCommonJSDeadBranch
 ---------- /out.js ----------
-if (false)
-  foo;
-if (false)
-  for (foo of bar)
-    ;
+if (false) foo;
+if (false) for (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitNoBundleDeadBranch
 ---------- /out.js ----------
-if (false)
-  await foo;
-if (false)
-  for await (foo of bar)
-    ;
+if (false) await foo;
+if (false) for await (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitNoBundleESM
 ---------- /out.js ----------
 await foo;
-for await (foo of bar)
-  ;
+for await (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitNoBundleESMDeadBranch
 ---------- /out.js ----------
-if (false)
-  await foo;
-if (false)
-  for await (foo of bar)
-    ;
+if (false) await foo;
+if (false) for await (foo of bar) ;
 
 ================================================================================
 TestTopLevelAwaitNoBundleIIFEDeadBranch
 ---------- /out.js ----------
 (() => {
-  if (false)
-    foo;
-  if (false)
-    for (foo of bar)
-      ;
+  if (false) foo;
+  if (false) for (foo of bar) ;
 })();
 
 ================================================================================
@@ -6047,29 +6973,22 @@ TestUseStrictDirectiveMinifyNoBundle
 TestVarRelocatingBundle
 ---------- /out/top-level.js ----------
 // top-level.js
-for (; 0; )
-  ;
+for (; 0; ) ;
 var b;
-for ({ c, x: [d] } = {}; 0; )
-  ;
+for ({ c, x: [d] } = {}; 0; ) ;
 var c;
 var d;
-for (e of [])
-  ;
+for (e of []) ;
 var e;
-for ({ f, x: [g] } of [])
-  ;
+for ({ f, x: [g] } of []) ;
 var f;
 var g;
-for (h in {})
-  ;
+for (h in {}) ;
 var h;
 i = 1;
-for (i in {})
-  ;
+for (i in {}) ;
 var i;
-for ({ j, x: [k] } in {})
-  ;
+for ({ j, x: [k] } in {}) ;
 var j;
 var k;
 
@@ -6079,21 +6998,14 @@ if (true) {
   let l = function() {
   };
   l2 = l;
-  for (; 0; )
-    ;
-  for ({ c, x: [d] } = {}; 0; )
-    ;
-  for (e of [])
-    ;
-  for ({ f, x: [g] } of [])
-    ;
-  for (h in {})
-    ;
+  for (; 0; ) ;
+  for ({ c, x: [d] } = {}; 0; ) ;
+  for (e of []) ;
+  for ({ f, x: [g] } of []) ;
+  for (h in {}) ;
   i = 1;
-  for (i in {})
-    ;
-  for ({ j, x: [k] } in {})
-    ;
+  for (i in {}) ;
+  for ({ j, x: [k] } in {}) ;
 }
 var a;
 var b;
@@ -6112,39 +7024,26 @@ var l2;
 // let.js
 if (true) {
   let a;
-  for (let b; 0; )
-    ;
-  for (let { c, x: [d] } = {}; 0; )
-    ;
-  for (let e of [])
-    ;
-  for (let { f, x: [g] } of [])
-    ;
-  for (let h in {})
-    ;
-  for (let { j, x: [k] } in {})
-    ;
+  for (let b; 0; ) ;
+  for (let { c, x: [d] } = {}; 0; ) ;
+  for (let e of []) ;
+  for (let { f, x: [g] } of []) ;
+  for (let h in {}) ;
+  for (let { j, x: [k] } in {}) ;
 }
 
 ---------- /out/function.js ----------
 // function.js
 function x() {
   var a;
-  for (var b; 0; )
-    ;
-  for (var { c, x: [d] } = {}; 0; )
-    ;
-  for (var e of [])
-    ;
-  for (var { f, x: [g] } of [])
-    ;
-  for (var h in {})
-    ;
+  for (var b; 0; ) ;
+  for (var { c, x: [d] } = {}; 0; ) ;
+  for (var e of []) ;
+  for (var { f, x: [g] } of []) ;
+  for (var h in {}) ;
   i = 1;
-  for (var i in {})
-    ;
-  for (var { j, x: [k] } in {})
-    ;
+  for (var i in {}) ;
+  for (var { j, x: [k] } in {}) ;
   function l() {
   }
 }
@@ -6158,21 +7057,14 @@ function x() {
     };
     var l = l2;
     var a;
-    for (var b; 0; )
-      ;
-    for (var { c, x: [d] } = {}; 0; )
-      ;
-    for (var e of [])
-      ;
-    for (var { f, x: [g] } of [])
-      ;
-    for (var h in {})
-      ;
+    for (var b; 0; ) ;
+    for (var { c, x: [d] } = {}; 0; ) ;
+    for (var e of []) ;
+    for (var { f, x: [g] } of []) ;
+    for (var h in {}) ;
     i = 1;
-    for (var i in {})
-      ;
-    for (var { j, x: [k] } in {})
-      ;
+    for (var i in {}) ;
+    for (var { j, x: [k] } in {}) ;
   }
 }
 x();
@@ -6181,21 +7073,14 @@ x();
 TestVarRelocatingNoBundle
 ---------- /out/top-level.js ----------
 var a;
-for (var b; 0; )
-  ;
-for (var { c, x: [d] } = {}; 0; )
-  ;
-for (var e of [])
-  ;
-for (var { f, x: [g] } of [])
-  ;
-for (var h in {})
-  ;
+for (var b; 0; ) ;
+for (var { c, x: [d] } = {}; 0; ) ;
+for (var e of []) ;
+for (var { f, x: [g] } of []) ;
+for (var h in {}) ;
 i = 1;
-for (var i in {})
-  ;
-for (var { j, x: [k] } in {})
-  ;
+for (var i in {}) ;
+for (var { j, x: [k] } in {}) ;
 function l() {
 }
 
@@ -6205,58 +7090,38 @@ if (true) {
   };
   var l2 = l;
   var a;
-  for (var b; 0; )
-    ;
-  for (var { c, x: [d] } = {}; 0; )
-    ;
-  for (var e of [])
-    ;
-  for (var { f, x: [g] } of [])
-    ;
-  for (var h in {})
-    ;
+  for (var b; 0; ) ;
+  for (var { c, x: [d] } = {}; 0; ) ;
+  for (var e of []) ;
+  for (var { f, x: [g] } of []) ;
+  for (var h in {}) ;
   i = 1;
-  for (var i in {})
-    ;
-  for (var { j, x: [k] } in {})
-    ;
+  for (var i in {}) ;
+  for (var { j, x: [k] } in {}) ;
 }
 
 ---------- /out/let.js ----------
 if (true) {
   let a;
-  for (let b; 0; )
-    ;
-  for (let { c, x: [d] } = {}; 0; )
-    ;
-  for (let e of [])
-    ;
-  for (let { f, x: [g] } of [])
-    ;
-  for (let h in {})
-    ;
-  for (let { j, x: [k] } in {})
-    ;
+  for (let b; 0; ) ;
+  for (let { c, x: [d] } = {}; 0; ) ;
+  for (let e of []) ;
+  for (let { f, x: [g] } of []) ;
+  for (let h in {}) ;
+  for (let { j, x: [k] } in {}) ;
 }
 
 ---------- /out/function.js ----------
 function x() {
   var a;
-  for (var b; 0; )
-    ;
-  for (var { c, x: [d] } = {}; 0; )
-    ;
-  for (var e of [])
-    ;
-  for (var { f, x: [g] } of [])
-    ;
-  for (var h in {})
-    ;
+  for (var b; 0; ) ;
+  for (var { c, x: [d] } = {}; 0; ) ;
+  for (var e of []) ;
+  for (var { f, x: [g] } of []) ;
+  for (var h in {}) ;
   i = 1;
-  for (var i in {})
-    ;
-  for (var { j, x: [k] } in {})
-    ;
+  for (var i in {}) ;
+  for (var { j, x: [k] } in {}) ;
   function l() {
   }
 }
@@ -6269,21 +7134,14 @@ function x() {
     };
     var l = l2;
     var a;
-    for (var b; 0; )
-      ;
-    for (var { c, x: [d] } = {}; 0; )
-      ;
-    for (var e of [])
-      ;
-    for (var { f, x: [g] } of [])
-      ;
-    for (var h in {})
-      ;
+    for (var b; 0; ) ;
+    for (var { c, x: [d] } = {}; 0; ) ;
+    for (var e of []) ;
+    for (var { f, x: [g] } of []) ;
+    for (var h in {}) ;
     i = 1;
-    for (var i in {})
-      ;
-    for (var { j, x: [k] } in {})
-      ;
+    for (var i in {}) ;
+    for (var { j, x: [k] } in {}) ;
   }
 }
 x();
@@ -6466,10 +7324,8 @@ TestWithStatementTaintingNoBundle
     let t = 5;
     hoisted++;
     t++;
-    if (1)
-      outer++;
-    if (0)
-      outerDead++;
+    if (1) outer++;
+    if (0) outerDead++;
   }
   if (1) {
     hoisted++;

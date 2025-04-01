@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/matthewmueller/esbuild_internal/ast"
 	"github.com/matthewmueller/esbuild_internal/compat"
 	"github.com/matthewmueller/esbuild_internal/helpers"
 	"github.com/matthewmueller/esbuild_internal/js_ast"
@@ -481,14 +482,14 @@ loop:
 				return
 			}
 			p.lexer.Next()
-			p.skipTypeScriptType(js_ast.LBitwiseOr)
+			p.skipTypeScriptTypeWithFlags(js_ast.LBitwiseOr, flags)
 
 		case js_lexer.TAmpersand:
 			if level >= js_ast.LBitwiseAnd {
 				return
 			}
 			p.lexer.Next()
-			p.skipTypeScriptType(js_ast.LBitwiseAnd)
+			p.skipTypeScriptTypeWithFlags(js_ast.LBitwiseAnd, flags)
 
 		case js_lexer.TExclamation:
 			// A postfix "!" is allowed in JSDoc types in TypeScript, which are only
@@ -650,6 +651,9 @@ const (
 
 	// TypeScript 5.0
 	allowConstModifier
+
+	// Allow "<>" without any type parameters
+	allowEmptyTypeParameters
 )
 
 type skipTypeScriptTypeParametersResult uint8
@@ -669,6 +673,11 @@ func (p *parser) skipTypeScriptTypeParameters(flags typeParameterFlags) skipType
 
 	p.lexer.Next()
 	result := couldBeTypeCast
+
+	if (flags&allowEmptyTypeParameters) != 0 && p.lexer.Token == js_lexer.TGreaterThan {
+		p.lexer.Next()
+		return definitelyTypeParameters
+	}
 
 	for {
 		hasIn := false
@@ -1180,7 +1189,7 @@ func (p *parser) skipTypeScriptInterfaceStmt(opts parseStmtOpts) {
 		p.localTypeNames[name] = true
 	}
 
-	p.skipTypeScriptTypeParameters(allowInOutVarianceAnnotations)
+	p.skipTypeScriptTypeParameters(allowInOutVarianceAnnotations | allowEmptyTypeParameters)
 
 	if p.lexer.Token == js_lexer.TExtends {
 		p.lexer.Next()
@@ -1255,7 +1264,7 @@ func (p *parser) skipTypeScriptTypeStmt(opts parseStmtOpts) {
 		p.localTypeNames[name] = true
 	}
 
-	p.skipTypeScriptTypeParameters(allowInOutVarianceAnnotations)
+	p.skipTypeScriptTypeParameters(allowInOutVarianceAnnotations | allowEmptyTypeParameters)
 	p.lexer.Expect(js_lexer.TEquals)
 	p.skipTypeScriptType(js_ast.LLowest)
 	p.lexer.ExpectOrInsertSemicolon()
@@ -1266,13 +1275,13 @@ func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_
 	nameLoc := p.lexer.Loc()
 	nameText := p.lexer.Identifier.String
 	p.lexer.Expect(js_lexer.TIdentifier)
-	name := js_ast.LocRef{Loc: nameLoc, Ref: js_ast.InvalidRef}
+	name := ast.LocRef{Loc: nameLoc, Ref: ast.InvalidRef}
 
 	// Generate the namespace object
 	exportedMembers := p.getOrCreateExportedNamespaceMembers(nameText, opts.isExport)
 	tsNamespace := &js_ast.TSNamespaceScope{
 		ExportedMembers: exportedMembers,
-		ArgRef:          js_ast.InvalidRef,
+		ArgRef:          ast.InvalidRef,
 		IsEnumScope:     true,
 	}
 	enumMemberData := &js_ast.TSNamespaceMemberNamespace{
@@ -1282,7 +1291,7 @@ func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_
 	// Declare the enum and create the scope
 	scopeIndex := len(p.scopesInOrder)
 	if !opts.isTypeScriptDeclare {
-		name.Ref = p.declareSymbol(js_ast.SymbolTSEnum, nameLoc, nameText)
+		name.Ref = p.declareSymbol(ast.SymbolTSEnum, nameLoc, nameText)
 		p.pushScopeForParsePass(js_ast.ScopeEntry, loc)
 		p.currentScope.TSNamespace = tsNamespace
 		p.refToTSNamespaceMemberData[name.Ref] = enumMemberData
@@ -1302,7 +1311,7 @@ func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_
 		nameRange := p.lexer.Range()
 		value := js_ast.EnumValue{
 			Loc: nameRange.Loc,
-			Ref: js_ast.InvalidRef,
+			Ref: ast.InvalidRef,
 		}
 
 		// Parse the name
@@ -1320,7 +1329,7 @@ func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_
 
 		// Identifiers can be referenced by other values
 		if !opts.isTypeScriptDeclare && js_ast.IsIdentifierUTF16(value.Name) {
-			value.Ref = p.declareSymbol(js_ast.SymbolOther, value.Loc, helpers.UTF16ToString(value.Name))
+			value.Ref = p.declareSymbol(ast.SymbolOther, value.Loc, helpers.UTF16ToString(value.Name))
 		}
 
 		// Parse the initializer
@@ -1403,10 +1412,10 @@ func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_
 			// Add a "_" to make tests easier to read, since non-bundler tests don't
 			// run the renamer. For external-facing things the renamer will avoid
 			// collisions automatically so this isn't important for correctness.
-			tsNamespace.ArgRef = p.newSymbol(js_ast.SymbolHoisted, "_"+nameText)
+			tsNamespace.ArgRef = p.newSymbol(ast.SymbolHoisted, "_"+nameText)
 			p.currentScope.Generated = append(p.currentScope.Generated, tsNamespace.ArgRef)
 		} else {
-			tsNamespace.ArgRef = p.declareSymbol(js_ast.SymbolHoisted, nameLoc, nameText)
+			tsNamespace.ArgRef = p.declareSymbol(ast.SymbolHoisted, nameLoc, nameText)
 		}
 		p.refToTSNamespaceMemberData[tsNamespace.ArgRef] = enumMemberData
 
@@ -1427,7 +1436,10 @@ func (p *parser) parseTypeScriptEnumStmt(loc logger.Loc, opts parseStmtOpts) js_
 	if p.scopesInOrderForEnum == nil {
 		p.scopesInOrderForEnum = make(map[logger.Loc][]scopeOrder)
 	}
-	p.scopesInOrderForEnum[loc] = p.scopesInOrder[scopeIndex:]
+
+	// Make a copy of "scopesInOrder" instead of a slice since the original
+	// array may be flattened in the future by "popAndFlattenScope"
+	p.scopesInOrderForEnum[loc] = append([]scopeOrder{}, p.scopesInOrder[scopeIndex:]...)
 
 	return js_ast.Stmt{Loc: loc, Data: &js_ast.SEnum{
 		Name:     name,
@@ -1479,7 +1491,7 @@ func (p *parser) parseTypeScriptImportEqualsStmt(loc logger.Loc, opts parseStmtO
 		return js_ast.Stmt{Loc: loc, Data: js_ast.STypeScriptShared}
 	}
 
-	ref := p.declareSymbol(js_ast.SymbolConst, defaultNameLoc, defaultName)
+	ref := p.declareSymbol(ast.SymbolConst, defaultNameLoc, defaultName)
 	decls := []js_ast.Decl{{
 		Binding:    js_ast.Binding{Loc: defaultNameLoc, Data: &js_ast.BIdentifier{Ref: ref}},
 		ValueOrNil: value,
@@ -1531,14 +1543,14 @@ func (p *parser) parseTypeScriptNamespaceStmt(loc logger.Loc, opts parseStmtOpts
 	exportedMembers := p.getOrCreateExportedNamespaceMembers(nameText, opts.isExport)
 	tsNamespace := &js_ast.TSNamespaceScope{
 		ExportedMembers: exportedMembers,
-		ArgRef:          js_ast.InvalidRef,
+		ArgRef:          ast.InvalidRef,
 	}
 	nsMemberData := &js_ast.TSNamespaceMemberNamespace{
 		ExportedMembers: exportedMembers,
 	}
 
 	// Declare the namespace and create the scope
-	name := js_ast.LocRef{Loc: nameLoc, Ref: js_ast.InvalidRef}
+	name := ast.LocRef{Loc: nameLoc, Ref: ast.InvalidRef}
 	scopeIndex := p.pushScopeForParsePass(js_ast.ScopeEntry, loc)
 	p.currentScope.TSNamespace = tsNamespace
 
@@ -1699,17 +1711,17 @@ func (p *parser) parseTypeScriptNamespaceStmt(loc logger.Loc, opts parseStmtOpts
 			// Add a "_" to make tests easier to read, since non-bundler tests don't
 			// run the renamer. For external-facing things the renamer will avoid
 			// collisions automatically so this isn't important for correctness.
-			tsNamespace.ArgRef = p.newSymbol(js_ast.SymbolHoisted, "_"+nameText)
+			tsNamespace.ArgRef = p.newSymbol(ast.SymbolHoisted, "_"+nameText)
 			p.currentScope.Generated = append(p.currentScope.Generated, tsNamespace.ArgRef)
 		} else {
-			tsNamespace.ArgRef = p.declareSymbol(js_ast.SymbolHoisted, nameLoc, nameText)
+			tsNamespace.ArgRef = p.declareSymbol(ast.SymbolHoisted, nameLoc, nameText)
 		}
 		p.refToTSNamespaceMemberData[tsNamespace.ArgRef] = nsMemberData
 	}
 
 	p.popScope()
 	if !opts.isTypeScriptDeclare {
-		name.Ref = p.declareSymbol(js_ast.SymbolTSNamespace, nameLoc, nameText)
+		name.Ref = p.declareSymbol(ast.SymbolTSNamespace, nameLoc, nameText)
 		p.refToTSNamespaceMemberData[name.Ref] = nsMemberData
 	}
 	return js_ast.Stmt{Loc: loc, Data: &js_ast.SNamespace{
@@ -1722,18 +1734,18 @@ func (p *parser) parseTypeScriptNamespaceStmt(loc logger.Loc, opts parseStmtOpts
 
 func (p *parser) generateClosureForTypeScriptNamespaceOrEnum(
 	stmts []js_ast.Stmt, stmtLoc logger.Loc, isExport bool, nameLoc logger.Loc,
-	nameRef js_ast.Ref, argRef js_ast.Ref, stmtsInsideClosure []js_ast.Stmt,
+	nameRef ast.Ref, argRef ast.Ref, stmtsInsideClosure []js_ast.Stmt,
 ) []js_ast.Stmt {
 	// Follow the link chain in case symbols were merged
 	symbol := p.symbols[nameRef.InnerIndex]
-	for symbol.Link != js_ast.InvalidRef {
+	for symbol.Link != ast.InvalidRef {
 		nameRef = symbol.Link
 		symbol = p.symbols[nameRef.InnerIndex]
 	}
 
 	// Make sure to only emit a variable once for a given namespace, since there
 	// can be multiple namespace blocks for the same namespace
-	if (symbol.Kind == js_ast.SymbolTSNamespace || symbol.Kind == js_ast.SymbolTSEnum) && !p.emittedNamespaceVars[nameRef] {
+	if (symbol.Kind == ast.SymbolTSNamespace || symbol.Kind == ast.SymbolTSEnum) && !p.emittedNamespaceVars[nameRef] {
 		decls := []js_ast.Decl{{Binding: js_ast.Binding{Loc: nameLoc, Data: &js_ast.BIdentifier{Ref: nameRef}}}}
 		p.emittedNamespaceVars[nameRef] = true
 		if p.currentScope == p.moduleScope {
@@ -1854,7 +1866,7 @@ func (p *parser) generateClosureForTypeScriptNamespaceOrEnum(
 
 func (p *parser) generateClosureForTypeScriptEnum(
 	stmts []js_ast.Stmt, stmtLoc logger.Loc, isExport bool, nameLoc logger.Loc,
-	nameRef js_ast.Ref, argRef js_ast.Ref, exprsInsideClosure []js_ast.Expr,
+	nameRef ast.Ref, argRef ast.Ref, exprsInsideClosure []js_ast.Expr,
 	allValuesArePure bool,
 ) []js_ast.Stmt {
 	// Bail back to the namespace code for enums that aren't at the top level.
@@ -1911,26 +1923,24 @@ func (p *parser) generateClosureForTypeScriptEnum(
 
 	// Follow the link chain in case symbols were merged
 	symbol := p.symbols[nameRef.InnerIndex]
-	for symbol.Link != js_ast.InvalidRef {
+	for symbol.Link != ast.InvalidRef {
 		nameRef = symbol.Link
 		symbol = p.symbols[nameRef.InnerIndex]
 	}
 
 	// Generate the body of the closure, including a return statement at the end
 	stmtsInsideClosure := []js_ast.Stmt{}
-	if len(exprsInsideClosure) > 0 {
-		argExpr := js_ast.Expr{Loc: nameLoc, Data: &js_ast.EIdentifier{Ref: argRef}}
-		if p.options.minifySyntax {
-			// "a; b; return c;" => "return a, b, c;"
-			joined := js_ast.JoinAllWithComma(exprsInsideClosure)
-			joined = js_ast.JoinWithComma(joined, argExpr)
-			stmtsInsideClosure = append(stmtsInsideClosure, js_ast.Stmt{Loc: joined.Loc, Data: &js_ast.SReturn{ValueOrNil: joined}})
-		} else {
-			for _, expr := range exprsInsideClosure {
-				stmtsInsideClosure = append(stmtsInsideClosure, js_ast.Stmt{Loc: expr.Loc, Data: &js_ast.SExpr{Value: expr}})
-			}
-			stmtsInsideClosure = append(stmtsInsideClosure, js_ast.Stmt{Loc: argExpr.Loc, Data: &js_ast.SReturn{ValueOrNil: argExpr}})
+	argExpr := js_ast.Expr{Loc: nameLoc, Data: &js_ast.EIdentifier{Ref: argRef}}
+	if p.options.minifySyntax {
+		// "a; b; return c;" => "return a, b, c;"
+		joined := js_ast.JoinAllWithComma(exprsInsideClosure)
+		joined = js_ast.JoinWithComma(joined, argExpr)
+		stmtsInsideClosure = append(stmtsInsideClosure, js_ast.Stmt{Loc: joined.Loc, Data: &js_ast.SReturn{ValueOrNil: joined}})
+	} else {
+		for _, expr := range exprsInsideClosure {
+			stmtsInsideClosure = append(stmtsInsideClosure, js_ast.Stmt{Loc: expr.Loc, Data: &js_ast.SExpr{Value: expr}})
 		}
+		stmtsInsideClosure = append(stmtsInsideClosure, js_ast.Stmt{Loc: argExpr.Loc, Data: &js_ast.SReturn{ValueOrNil: argExpr}})
 	}
 
 	// Try to use an arrow function if possible for compactness

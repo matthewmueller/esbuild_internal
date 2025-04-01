@@ -27,8 +27,8 @@ import (
 )
 
 func es(version int) compat.JSFeature {
-	return compat.UnsupportedJSFeatures(map[compat.Engine][]int{
-		compat.ES: {version},
+	return compat.UnsupportedJSFeatures(map[compat.Engine]compat.Semver{
+		compat.ES: {Parts: []int{version}},
 	})
 }
 
@@ -124,6 +124,9 @@ func (s *suite) __expectBundledImpl(t *testing.T, args bundled, fsKind fs.MockKi
 		entryPoints = append(entryPoints, args.entryPathsAdvanced...)
 		if args.absWorkingDir == "" {
 			args.absWorkingDir = "/"
+		}
+		if args.options.AbsOutputDir == "" {
+			args.options.AbsOutputDir = args.absWorkingDir // Match the behavior of the API in this case
 		}
 
 		// Handle conversion to Windows-style paths

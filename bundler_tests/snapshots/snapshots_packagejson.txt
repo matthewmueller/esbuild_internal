@@ -4,6 +4,14 @@ TestCommonJSVariableInESMTypeModule
 module.exports = null;
 
 ================================================================================
+TestPackageJsonBadExportsDefaultWarningIssue3867
+---------- /out.js ----------
+
+================================================================================
+TestPackageJsonBadExportsImportAndRequireWarningIssue3867
+---------- /out.js ----------
+
+================================================================================
 TestPackageJsonBadMain
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/node_modules/demo-pkg/index.js
@@ -416,6 +424,19 @@ function main_browser_esm_default() {
 console.log(main_browser_esm_default());
 
 ================================================================================
+TestPackageJsonDisabledTypeModuleIssue3367
+---------- /out.js ----------
+// (disabled):node_modules/foo/index.js
+var require_foo = __commonJS({
+  "(disabled):node_modules/foo/index.js"() {
+  }
+});
+
+// entry.js
+var import_foo = __toESM(require_foo());
+(0, import_foo.default)();
+
+================================================================================
 TestPackageJsonDualPackageHazardImportAndRequireBrowser
 ---------- /Users/user/project/out.js ----------
 // Users/user/project/node_modules/demo-pkg/main.browser.js
@@ -565,6 +586,12 @@ TestPackageJsonExportsDefaultOverImportAndRequire
 console.log("SUCCESS");
 
 ================================================================================
+TestPackageJsonExportsDefaultWarningIssue3887
+---------- /out.js ----------
+// node_modules/foo/dist/index.js
+success();
+
+================================================================================
 TestPackageJsonExportsEntryPointImportOverRequire
 ---------- /out.js ----------
 // node_modules/pkg/import.js
@@ -656,10 +683,10 @@ TestPackageJsonImportSelfUsingImport
 var foo_import_default = "foo";
 
 // Users/user/project/src/index.js
-var src_default = "index";
-console.log(src_default, foo_import_default);
+var index_default = "index";
+console.log(index_default, foo_import_default);
 export {
-  src_default as default
+  index_default as default
 };
 
 ================================================================================
@@ -669,10 +696,10 @@ TestPackageJsonImportSelfUsingImportScoped
 var foo_import_default = "foo";
 
 // Users/user/project/src/index.js
-var src_default = "index";
-console.log(src_default, foo_import_default);
+var index_default = "index";
+console.log(index_default, foo_import_default);
 export {
-  src_default as default
+  index_default as default
 };
 
 ================================================================================
@@ -686,16 +713,16 @@ var require_foo_require = __commonJS({
 });
 
 // Users/user/project/src/index.js
-var require_src = __commonJS({
+var require_index = __commonJS({
   "Users/user/project/src/index.js"(exports, module) {
     module.exports = "index";
     console.log(
-      require_src(),
+      require_index(),
       require_foo_require()
     );
   }
 });
-export default require_src();
+export default require_index();
 
 ================================================================================
 TestPackageJsonImportSelfUsingRequireScoped
@@ -708,16 +735,16 @@ var require_foo_require = __commonJS({
 });
 
 // Users/user/project/src/index.js
-var require_src = __commonJS({
+var require_index = __commonJS({
   "Users/user/project/src/index.js"(exports, module) {
     module.exports = "index";
     console.log(
-      require_src(),
+      require_index(),
       require_foo_require()
     );
   }
 });
-export default require_src();
+export default require_index();
 
 ================================================================================
 TestPackageJsonImports
@@ -829,6 +856,15 @@ console.log("pkg3");
 
 // tmp/pkg/@scope/pkg4/bat.js
 console.log("pkg4");
+
+================================================================================
+TestPackageJsonSubpathImportNodeBuiltinIssue3485
+---------- /out.js ----------
+// entry.js
+import fs from "fs";
+import http from "node:http";
+fs.readFileSync();
+http.createServer();
 
 ================================================================================
 TestPackageJsonTypeShouldBeTypes

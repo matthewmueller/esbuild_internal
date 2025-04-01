@@ -1,6 +1,8 @@
 package css_parser
 
 import (
+	"strings"
+
 	"github.com/matthewmueller/esbuild_internal/css_ast"
 	"github.com/matthewmueller/esbuild_internal/css_lexer"
 	"github.com/matthewmueller/esbuild_internal/logger"
@@ -134,7 +136,7 @@ func (box *boxTracker) mangleSide(rules []css_ast.Rule, decl *css_ast.RDeclarati
 	}
 
 	if tokens := decl.Value; len(tokens) == 1 {
-		if t := tokens[0]; t.Kind.IsNumeric() || (t.Kind == css_lexer.TIdent && box.allowAuto && t.Text == "auto") {
+		if t := tokens[0]; t.Kind.IsNumeric() || (t.Kind == css_lexer.TIdent && box.allowAuto && strings.EqualFold(t.Text, "auto")) {
 			unitSafety := unitSafetyTracker{}
 			if !box.allowAuto || t.Kind.IsNumeric() {
 				unitSafety.includeUnitOf(t)
@@ -157,6 +159,11 @@ func (box *boxTracker) mangleSide(rules []css_ast.Rule, decl *css_ast.RDeclarati
 }
 
 func (box *boxTracker) compactRules(rules []css_ast.Rule, keyRange logger.Range, minifyWhitespace bool) {
+	// Don't compact if the shorthand form is unsupported
+	if box.key == css_ast.DUnknown {
+		return
+	}
+
 	// All tokens must be present
 	if eof := css_lexer.TEndOfFile; box.sides[0].token.Kind == eof || box.sides[1].token.Kind == eof ||
 		box.sides[2].token.Kind == eof || box.sides[3].token.Kind == eof {
@@ -180,17 +187,20 @@ func (box *boxTracker) compactRules(rules []css_ast.Rule, keyRange logger.Range,
 	)
 
 	// Remove all of the existing declarations
-	rules[box.sides[0].ruleIndex] = css_ast.Rule{}
-	rules[box.sides[1].ruleIndex] = css_ast.Rule{}
-	rules[box.sides[2].ruleIndex] = css_ast.Rule{}
-	rules[box.sides[3].ruleIndex] = css_ast.Rule{}
+	var minLoc logger.Loc
+	for i, side := range box.sides {
+		if loc := rules[side.ruleIndex].Loc; i == 0 || loc.Start < minLoc.Start {
+			minLoc = loc
+		}
+		rules[side.ruleIndex] = css_ast.Rule{}
+	}
 
 	// Insert the combined declaration where the last rule was
-	rules[box.sides[3].ruleIndex].Data = &css_ast.RDeclaration{
+	rules[box.sides[3].ruleIndex] = css_ast.Rule{Loc: minLoc, Data: &css_ast.RDeclaration{
 		Key:       box.key,
 		KeyText:   box.keyText,
 		Value:     tokens,
 		KeyRange:  keyRange,
 		Important: box.important,
-	}
+	}}
 }

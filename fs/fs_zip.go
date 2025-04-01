@@ -112,10 +112,7 @@ func tryToReadZipArchive(zipPath string, archive *zipFile) {
 
 	// Build an index of all files in the archive
 	for _, file := range reader.File {
-		baseName := file.Name
-		if strings.HasSuffix(baseName, "/") {
-			baseName = baseName[:len(baseName)-1]
-		}
+		baseName := strings.TrimSuffix(file.Name, "/")
 		dirPath := ""
 		if slash := strings.LastIndexByte(baseName, '/'); slash != -1 {
 			dirPath = baseName[:slash]
@@ -323,6 +320,10 @@ func (fs *zipFS) Cwd() string {
 
 func (fs *zipFS) Rel(base string, target string) (string, bool) {
 	return fs.inner.Rel(base, target)
+}
+
+func (fs *zipFS) EvalSymlinks(path string) (string, bool) {
+	return fs.inner.EvalSymlinks(path)
 }
 
 func (fs *zipFS) kind(dir string, base string) (symlink string, kind EntryKind) {

@@ -25,23 +25,23 @@ var init_a = __esm({
 var B;
 var init_b = __esm({
   "src/b.js"() {
-    B = async () => (await Promise.resolve().then(() => (init_src(), src_exports))).A;
+    B = async () => (await Promise.resolve().then(() => (init_index(), index_exports))).A;
   }
 });
 
 // src/index.js
-var src_exports = {};
-__export(src_exports, {
+var index_exports = {};
+__export(index_exports, {
   A: () => A,
   B: () => B
 });
-var init_src = __esm({
+var init_index = __esm({
   "src/index.js"() {
     init_a();
     init_b();
   }
 });
-init_src();
+init_index();
 export {
   A,
   B
@@ -128,15 +128,15 @@ TestSplittingCrossChunkAssignmentDependencies
 ---------- /out/a.js ----------
 import {
   setValue
-} from "./chunk-RPIUS5UE.js";
+} from "./chunk-3GNPIT25.js";
 
 // a.js
 setValue(123);
 
 ---------- /out/b.js ----------
-import "./chunk-RPIUS5UE.js";
+import "./chunk-3GNPIT25.js";
 
----------- /out/chunk-RPIUS5UE.js ----------
+---------- /out/chunk-3GNPIT25.js ----------
 // shared.js
 var observer;
 var value;
@@ -145,8 +145,7 @@ function getValue() {
 }
 function setValue(next) {
   value = next;
-  if (observer)
-    observer();
+  if (observer) observer();
 }
 sideEffects(getValue);
 
@@ -259,19 +258,19 @@ TestSplittingDynamicAndNotDynamicCommonJSIntoES6
 import {
   __toESM,
   require_foo
-} from "./chunk-H2HESYLH.js";
+} from "./chunk-X3UWZZCR.js";
 
 // entry.js
 var import_foo = __toESM(require_foo());
-import("./foo-OK6Y35CI.js").then(({ default: { bar: b } }) => console.log(import_foo.bar, b));
+import("./foo-BJYZ44Z3.js").then(({ default: { bar: b } }) => console.log(import_foo.bar, b));
 
----------- /out/foo-OK6Y35CI.js ----------
+---------- /out/foo-BJYZ44Z3.js ----------
 import {
   require_foo
-} from "./chunk-H2HESYLH.js";
+} from "./chunk-X3UWZZCR.js";
 export default require_foo();
 
----------- /out/chunk-H2HESYLH.js ----------
+---------- /out/chunk-X3UWZZCR.js ----------
 // foo.js
 var require_foo = __commonJS({
   "foo.js"(exports) {
@@ -314,9 +313,9 @@ export {
 TestSplittingDynamicCommonJSIntoES6
 ---------- /out/entry.js ----------
 // entry.js
-import("./foo-PPQD77K4.js").then(({ default: { bar } }) => console.log(bar));
+import("./foo-X6C7FV5C.js").then(({ default: { bar } }) => console.log(bar));
 
----------- /out/foo-PPQD77K4.js ----------
+---------- /out/foo-X6C7FV5C.js ----------
 // foo.js
 var require_foo = __commonJS({
   "foo.js"(exports) {
@@ -371,7 +370,7 @@ TestSplittingHybridESMAndCJSIssue617
 import {
   foo,
   init_a
-} from "./chunk-NE324UYZ.js";
+} from "./chunk-PDZFCFBH.js";
 init_a();
 export {
   foo
@@ -382,7 +381,7 @@ import {
   __toCommonJS,
   a_exports,
   init_a
-} from "./chunk-NE324UYZ.js";
+} from "./chunk-PDZFCFBH.js";
 
 // b.js
 var bar = (init_a(), __toCommonJS(a_exports));
@@ -390,7 +389,7 @@ export {
   bar
 };
 
----------- /out/chunk-NE324UYZ.js ----------
+---------- /out/chunk-PDZFCFBH.js ----------
 // a.js
 var a_exports = {};
 __export(a_exports, {
@@ -541,7 +540,7 @@ TestSplittingSharedCommonJSIntoES6
 ---------- /out/a.js ----------
 import {
   require_shared
-} from "./chunk-KTJ3L72M.js";
+} from "./chunk-JQJBVS2P.js";
 
 // a.js
 var { foo } = require_shared();
@@ -550,13 +549,13 @@ console.log(foo);
 ---------- /out/b.js ----------
 import {
   require_shared
-} from "./chunk-KTJ3L72M.js";
+} from "./chunk-JQJBVS2P.js";
 
 // b.js
 var { foo } = require_shared();
 console.log(foo);
 
----------- /out/chunk-KTJ3L72M.js ----------
+---------- /out/chunk-JQJBVS2P.js ----------
 // shared.js
 var require_shared = __commonJS({
   "shared.js"(exports) {

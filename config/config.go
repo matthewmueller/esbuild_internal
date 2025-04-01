@@ -193,9 +193,12 @@ const (
 	LoaderDefault
 	LoaderEmpty
 	LoaderFile
+	LoaderGlobalCSS
 	LoaderJS
 	LoaderJSON
+	LoaderWithTypeJSON // Has a "with { type: 'json' }" attribute
 	LoaderJSX
+	LoaderLocalCSS
 	LoaderText
 	LoaderTS
 	LoaderTSNoAmbiguousLessThan // Used with ".mts" and ".cts"
@@ -212,9 +215,12 @@ var LoaderToString = []string{
 	"default",
 	"empty",
 	"file",
+	"global-css",
 	"js",
 	"json",
+	"json",
 	"jsx",
+	"local-css",
 	"text",
 	"ts",
 	"ts",
@@ -225,18 +231,53 @@ func (loader Loader) IsTypeScript() bool {
 	switch loader {
 	case LoaderTS, LoaderTSNoAmbiguousLessThan, LoaderTSX:
 		return true
-	default:
-		return false
 	}
+	return false
+}
+
+func (loader Loader) IsCSS() bool {
+	switch loader {
+	case
+		LoaderCSS, LoaderGlobalCSS, LoaderLocalCSS:
+		return true
+	}
+	return false
 }
 
 func (loader Loader) CanHaveSourceMap() bool {
 	switch loader {
-	case LoaderJS, LoaderJSX, LoaderTS, LoaderTSNoAmbiguousLessThan, LoaderTSX, LoaderCSS, LoaderJSON, LoaderText:
+	case
+		LoaderJS, LoaderJSX,
+		LoaderTS, LoaderTSNoAmbiguousLessThan, LoaderTSX,
+		LoaderCSS, LoaderGlobalCSS, LoaderLocalCSS,
+		LoaderJSON, LoaderWithTypeJSON, LoaderText:
 		return true
-	default:
-		return false
 	}
+	return false
+}
+
+func LoaderFromFileExtension(extensionToLoader map[string]Loader, base string) Loader {
+	// Pick the loader with the longest matching extension. So if there's an
+	// extension for ".css" and for ".module.css", we want to match the one for
+	// ".module.css" before the one for ".css".
+	if i := strings.IndexByte(base, '.'); i != -1 {
+		for {
+			if loader, ok := extensionToLoader[base[i:]]; ok {
+				return loader
+			}
+			base = base[i+1:]
+			i = strings.IndexByte(base, '.')
+			if i == -1 {
+				break
+			}
+		}
+	} else {
+		// If there's no extension, explicitly check for an extensionless loader
+		if loader, ok := extensionToLoader[""]; ok {
+			return loader
+		}
+	}
+	return LoaderNone
 }
 
 type Format uint8
@@ -377,12 +418,16 @@ type Options struct {
 	// parallel so only property mangling is serialized, which is implemented by
 	// this function blocking until the previous entry point's property mangling
 	// has finished.
-	ExclusiveMangleCacheUpdate func(cb func(mangleCache map[string]interface{}))
+	ExclusiveMangleCacheUpdate func(cb func(
+		mangleCache map[string]interface{},
+		cssUsedLocalNames map[string]bool,
+	))
 
 	// This is the original information that was used to generate the
 	// unsupported feature sets above. It's used for error messages.
 	OriginalTargetEnv string
 
+	DropLabels       []string
 	ExtensionOrder   []string
 	MainFields       []string
 	Conditions       []string
@@ -750,6 +795,7 @@ type OnResolveArgs struct {
 	PluginData interface{}
 	Importer   logger.Path
 	Kind       ast.ImportKind
+	With       logger.ImportAttributes
 }
 
 type OnResolveResult struct {
@@ -793,4 +839,28 @@ type OnLoadResult struct {
 	AbsWatchDirs  []string
 
 	Loader Loader
+}
+
+func PrettyPrintTargetEnvironment(originalTargetEnv string, unsupportedJSFeatureOverridesMask compat.JSFeature) (where string) {
+	where = "the configured target environment"
+	overrides := ""
+	if unsupportedJSFeatureOverridesMask != 0 {
+		count := 0
+		mask := unsupportedJSFeatureOverridesMask
+		for mask != 0 {
+			if (mask & 1) != 0 {
+				count++
+			}
+			mask >>= 1
+		}
+		s := "s"
+		if count == 1 {
+			s = ""
+		}
+		overrides = fmt.Sprintf(" + %d override%s", count, s)
+	}
+	if originalTargetEnv != "" {
+		where = fmt.Sprintf("%s (%s%s)", where, originalTargetEnv, overrides)
+	}
+	return
 }

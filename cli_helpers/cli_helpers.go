@@ -39,12 +39,16 @@ func ParseLoader(text string) (api.Loader, *ErrorWithNote) {
 		return api.LoaderEmpty, nil
 	case "file":
 		return api.LoaderFile, nil
+	case "global-css":
+		return api.LoaderGlobalCSS, nil
 	case "js":
 		return api.LoaderJS, nil
 	case "json":
 		return api.LoaderJSON, nil
 	case "jsx":
 		return api.LoaderJSX, nil
+	case "local-css":
+		return api.LoaderLocalCSS, nil
 	case "text":
 		return api.LoaderText, nil
 	case "ts":
@@ -54,7 +58,7 @@ func ParseLoader(text string) (api.Loader, *ErrorWithNote) {
 	default:
 		return api.LoaderNone, MakeErrorWithNote(
 			fmt.Sprintf("Invalid loader value: %q", text),
-			"Valid values are \"base64\", \"binary\", \"copy\", \"css\", \"dataurl\", \"empty\", \"file\", \"js\", \"json\", \"jsx\", \"text\", \"ts\", or \"tsx\".",
+			"Valid values are \"base64\", \"binary\", \"copy\", \"css\", \"dataurl\", \"empty\", \"file\", \"global-css\", \"js\", \"json\", \"jsx\", \"local-css\", \"text\", \"ts\", or \"tsx\".",
 		)
 	}
 }

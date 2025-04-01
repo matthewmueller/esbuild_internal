@@ -673,9 +673,23 @@ func RangeOfIdentifier(source logger.Source, loc logger.Loc) logger.Range {
 	return source.RangeOfString(loc)
 }
 
-func RangeOfImportAssertion(source logger.Source, assertion ast.AssertEntry) logger.Range {
-	loc := RangeOfIdentifier(source, assertion.KeyLoc).Loc
-	return logger.Range{Loc: loc, Len: source.RangeOfString(assertion.ValueLoc).End() - loc.Start}
+type KeyOrValue uint8
+
+const (
+	KeyRange KeyOrValue = iota
+	ValueRange
+	KeyAndValueRange
+)
+
+func RangeOfImportAssertOrWith(source logger.Source, assertOrWith ast.AssertOrWithEntry, which KeyOrValue) logger.Range {
+	if which == KeyRange {
+		return RangeOfIdentifier(source, assertOrWith.KeyLoc)
+	}
+	if which == ValueRange {
+		return source.RangeOfString(assertOrWith.ValueLoc)
+	}
+	loc := RangeOfIdentifier(source, assertOrWith.KeyLoc).Loc
+	return logger.Range{Loc: loc, Len: source.RangeOfString(assertOrWith.ValueLoc).End() - loc.Start}
 }
 
 func (lexer *Lexer) ExpectJSXElementChild(token T) {
@@ -780,12 +794,6 @@ func (lexer *Lexer) NextJSXElementChild() {
 			if needsFixing {
 				// Slow path
 				lexer.decodedStringLiteralOrNil = fixWhitespaceAndDecodeJSXEntities(text)
-
-				// Skip this token if it turned out to be empty after trimming
-				if len(lexer.decodedStringLiteralOrNil) == 0 {
-					lexer.HasNewlineBefore = true
-					continue
-				}
 			} else {
 				// Fast path
 				n := len(text)

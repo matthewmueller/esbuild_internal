@@ -2,7 +2,6 @@ package config
 
 import (
 	"math"
-	"strings"
 	"sync"
 
 	"github.com/matthewmueller/esbuild_internal/ast"
@@ -868,43 +867,47 @@ type DefineExpr struct {
 }
 
 type DefineData struct {
+	KeyParts   []string
 	DefineExpr *DefineExpr
+	Flags      DefineFlags
+}
 
+type DefineFlags uint8
+
+const (
 	// True if accessing this value is known to not have any side effects. For
 	// example, a bare reference to "Object.create" can be removed because it
 	// does not have any observable side effects.
-	CanBeRemovedIfUnused bool
+	CanBeRemovedIfUnused DefineFlags = 1 << iota
 
 	// True if a call to this value is known to not have any side effects. For
 	// example, a bare call to "Object()" can be removed because it does not
 	// have any observable side effects.
-	CallCanBeUnwrappedIfUnused bool
+	CallCanBeUnwrappedIfUnused
 
 	// If true, the user has indicated that every direct calls to a property on
 	// this object and all of that call's arguments are to be removed from the
 	// output, even when the arguments have side effects. This is used to
 	// implement the "--drop:console" flag.
-	MethodCallsMustBeReplacedWithUndefined bool
+	MethodCallsMustBeReplacedWithUndefined
+
+	// Symbol values are known to not have side effects when used as property
+	// names in class declarations and object literals.
+	IsSymbolInstance
+)
+
+func (flags DefineFlags) Has(flag DefineFlags) bool {
+	return (flags & flag) != 0
 }
 
 func mergeDefineData(old DefineData, new DefineData) DefineData {
-	if old.CanBeRemovedIfUnused {
-		new.CanBeRemovedIfUnused = true
-	}
-	if old.CallCanBeUnwrappedIfUnused {
-		new.CallCanBeUnwrappedIfUnused = true
-	}
+	new.Flags |= old.Flags
 	return new
-}
-
-type DotDefine struct {
-	Data  DefineData
-	Parts []string
 }
 
 type ProcessedDefines struct {
 	IdentifierDefines map[string]DefineData
-	DotDefines        map[string][]DotDefine
+	DotDefines        map[string][]DefineData
 }
 
 // This transformation is expensive, so we only want to do it once. Make sure
@@ -912,7 +915,7 @@ type ProcessedDefines struct {
 // doesn't have an efficient way to copy a map and the overhead of copying
 // all of the properties into a new map once for every new parser noticeably
 // slows down our benchmarks.
-func ProcessDefines(userDefines map[string]DefineData) ProcessedDefines {
+func ProcessDefines(userDefines []DefineData) ProcessedDefines {
 	// Optimization: reuse known globals if there are no user-specified defines
 	hasUserDefines := len(userDefines) != 0
 	if !hasUserDefines {
@@ -926,7 +929,7 @@ func ProcessDefines(userDefines map[string]DefineData) ProcessedDefines {
 
 	result := ProcessedDefines{
 		IdentifierDefines: make(map[string]DefineData),
-		DotDefines:        make(map[string][]DotDefine),
+		DotDefines:        make(map[string][]DefineData),
 	}
 
 	// Mark these property accesses as free of side effects. That means they can
@@ -937,9 +940,18 @@ func ProcessDefines(userDefines map[string]DefineData) ProcessedDefines {
 	for _, parts := range knownGlobals {
 		tail := parts[len(parts)-1]
 		if len(parts) == 1 {
-			result.IdentifierDefines[tail] = DefineData{CanBeRemovedIfUnused: true}
+			result.IdentifierDefines[tail] = DefineData{Flags: CanBeRemovedIfUnused}
 		} else {
-			result.DotDefines[tail] = append(result.DotDefines[tail], DotDefine{Parts: parts, Data: DefineData{CanBeRemovedIfUnused: true}})
+			flags := CanBeRemovedIfUnused
+
+			// All properties on the "Symbol" global are currently symbol instances
+			// (i.e. "typeof Symbol.iterator === 'symbol'"). This is used to avoid
+			// treating properties with these names as having side effects.
+			if parts[0] == "Symbol" {
+				flags |= IsSymbolInstance
+			}
+
+			result.DotDefines[tail] = append(result.DotDefines[tail], DefineData{KeyParts: parts, Flags: flags})
 		}
 	}
 
@@ -956,31 +968,29 @@ func ProcessDefines(userDefines map[string]DefineData) ProcessedDefines {
 
 	// Then copy the user-specified defines in afterwards, which will overwrite
 	// any known globals above.
-	for key, data := range userDefines {
-		parts := strings.Split(key, ".")
-
+	for _, data := range userDefines {
 		// Identifier defines are special-cased
-		if len(parts) == 1 {
-			result.IdentifierDefines[key] = mergeDefineData(result.IdentifierDefines[key], data)
+		if len(data.KeyParts) == 1 {
+			name := data.KeyParts[0]
+			result.IdentifierDefines[name] = mergeDefineData(result.IdentifierDefines[name], data)
 			continue
 		}
 
-		tail := parts[len(parts)-1]
+		tail := data.KeyParts[len(data.KeyParts)-1]
 		dotDefines := result.DotDefines[tail]
 		found := false
 
 		// Try to merge with existing dot defines first
 		for i, define := range dotDefines {
-			if helpers.StringArraysEqual(parts, define.Parts) {
-				define := &dotDefines[i]
-				define.Data = mergeDefineData(define.Data, data)
+			if helpers.StringArraysEqual(data.KeyParts, define.KeyParts) {
+				dotDefines[i] = mergeDefineData(dotDefines[i], data)
 				found = true
 				break
 			}
 		}
 
 		if !found {
-			dotDefines = append(dotDefines, DotDefine{Parts: parts, Data: data})
+			dotDefines = append(dotDefines, data)
 		}
 		result.DotDefines[tail] = dotDefines
 	}

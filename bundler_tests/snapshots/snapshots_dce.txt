@@ -126,6 +126,12 @@ var y;
 var z;
 ((z) => (z.x = 1, console.log(1, eval("x"))))(z ||= {});
 
+---------- /out/issue-4055.js ----------
+const variable = !1;
+(function() {
+  eval("var variable = true"), console.log(variable);
+})();
+
 ================================================================================
 TestConstValueInliningNoBundle
 ---------- /out/top-level.js ----------
@@ -257,7 +263,7 @@ function foo() {
 }
 
 ================================================================================
-TestCrossModuleConstantFolding
+TestCrossModuleConstantFoldingNumber
 ---------- /out/enum-entry.js ----------
 // enum-entry.ts
 console.log([
@@ -267,21 +273,21 @@ console.log([
   !6 /* b */,
   typeof 6 /* b */
 ], [
-  3 /* a */ + 6 /* b */,
-  3 /* a */ - 6 /* b */,
+  9,
+  -3,
   3 /* a */ * 6 /* b */,
   3 /* a */ / 6 /* b */,
   3 /* a */ % 6 /* b */,
   3 /* a */ ** 6 /* b */
 ], [
-  3 /* a */ < 6 /* b */,
-  3 /* a */ > 6 /* b */,
-  3 /* a */ <= 6 /* b */,
-  3 /* a */ >= 6 /* b */,
-  3 /* a */ == 6 /* b */,
-  3 /* a */ != 6 /* b */,
-  3 /* a */ === 6 /* b */,
-  3 /* a */ !== 6 /* b */
+  !0,
+  !1,
+  !0,
+  !1,
+  !1,
+  !0,
+  !1,
+  !0
 ], [
   12,
   3,
@@ -291,9 +297,11 @@ console.log([
   7,
   5
 ], [
-  3 /* a */ && 6 /* b */,
-  3 /* a */ || 6 /* b */,
-  3 /* a */ ?? 6 /* b */
+  6 /* b */,
+  3 /* a */,
+  3 /* a */,
+  "y",
+  "n"
 ]);
 
 ---------- /out/const-entry.js ----------
@@ -305,21 +313,21 @@ console.log([
   !6,
   typeof 6
 ], [
-  3 + 6,
-  3 - 6,
+  9,
+  -3,
   3 * 6,
   3 / 6,
   3 % 6,
   3 ** 6
 ], [
-  3 < 6,
-  3 > 6,
-  3 <= 6,
-  3 >= 6,
-  3 == 6,
-  3 != 6,
-  3 === 6,
-  3 !== 6
+  !0,
+  !1,
+  !0,
+  !1,
+  !1,
+  !0,
+  !1,
+  !0
 ], [
   12,
   3,
@@ -329,9 +337,11 @@ console.log([
   7,
   5
 ], [
-  3 && 6,
-  3 || 6,
-  3 ?? 6
+  6,
+  3,
+  3,
+  "y",
+  "n"
 ]);
 
 ---------- /out/nested-entry.js ----------
@@ -339,6 +349,67 @@ console.log([
 console.log({
   "should be 4": 4,
   "should be 32": 32
+});
+
+================================================================================
+TestCrossModuleConstantFoldingString
+---------- /out/enum-entry.js ----------
+// enum-entry.ts
+console.log([
+  typeof "bar" /* b */
+], [
+  "foobar"
+], [
+  !1,
+  !0,
+  !1,
+  !0,
+  !1,
+  !0,
+  !1,
+  !0
+], [
+  "bar" /* b */,
+  "foo" /* a */,
+  "foo" /* a */,
+  "y",
+  "n"
+]);
+
+---------- /out/const-entry.js ----------
+// const-constants.js
+var a = "foo", b = "bar";
+
+// const-entry.js
+console.log([
+  typeof b
+], [
+  a + b
+], [
+  a < b,
+  a > b,
+  a <= b,
+  a >= b,
+  a == b,
+  a != b,
+  a === b,
+  a !== b
+], [
+  a && b,
+  a || b,
+  a ?? b,
+  a ? "y" : "n",
+  b ? "n" : "y"
+]);
+
+---------- /out/nested-entry.js ----------
+// nested-constants.ts
+var a = "foo", b = "bar", c = "baz";
+
+// nested-entry.ts
+console.log({
+  "should be foobarbaz": a + b + c,
+  "should be FOOBARBAZ": "FOOBARBAZ"
 });
 
 ================================================================================
@@ -393,10 +464,7 @@ var A_keep = class {
   }
 }, D_keep = class {
   static {
-    try {
-    } finally {
-      foo;
-    }
+    foo;
   }
 };
 
@@ -409,34 +477,37 @@ var fn = () => {
 };
 
 // keep-these.js
-var Class = @(fn) class {
+var Class = @fn class {
 };
 var Field = class {
-  @(fn)
-  field;
+  @fn field;
 };
 var Method = class {
-  @(fn)
-  method() {
+  @fn method() {
   }
 };
 var Accessor = class {
-  @(fn)
-  accessor accessor;
+  @fn accessor accessor;
 };
 var StaticField = class {
-  @(fn)
-  static field;
+  @fn static field;
 };
 var StaticMethod = class {
-  @(fn)
-  static method() {
+  @fn static method() {
   }
 };
 var StaticAccessor = class {
-  @(fn)
-  static accessor accessor;
+  @fn static accessor accessor;
 };
+
+================================================================================
+TestDCEOfDestructuring
+---------- /out/entry.js ----------
+// entry.js
+var KEEP1 = x;
+var [KEEP2] = [x];
+var [KEEP3] = [...{}];
+var { KEEP4 } = {};
 
 ================================================================================
 TestDCEOfExperimentalDecorators
@@ -526,8 +597,7 @@ TestDCEOfIIFE
 keepThisButRemoveTheIIFE;
 
 ---------- /out/keep-these.js ----------
-undef = /* @__PURE__ */ (() => {
-})();
+undef = void 0;
 keepMe();
 ((x = keepMe()) => {
 })();
@@ -536,6 +606,50 @@ var someVar;
 })(someVar);
 (({ z }) => {
 })(someVar);
+var keepThis = stuff();
+keepThis();
+((_ = keepMe()) => {
+})();
+var isPure = /* @__PURE__ */ ((x, y) => 123)();
+use(isPure);
+var isNotPure = ((x = foo, y = bar) => 123)();
+use(isNotPure);
+(async () => ({ get then() {
+  notPure();
+} }))();
+(async function() {
+  return { get then() {
+    notPure();
+  } };
+})();
+
+================================================================================
+TestDCEOfSymbolInstances
+---------- /out/class.js ----------
+// class.js
+var Keep1 = class {
+  *[Symbol.iterator]() {
+  }
+  [keep];
+};
+var Keep2 = class {
+  [keep];
+  *[Symbol.iterator]() {
+  }
+};
+var Keep3 = class {
+  *[Symbol.wtf]() {
+  }
+};
+
+---------- /out/object.js ----------
+// object.js
+var keep1 = { *[Symbol.iterator]() {
+}, [keep]: null };
+var keep2 = { [keep]: null, *[Symbol.iterator]() {
+} };
+var keep3 = { *[Symbol.wtf]() {
+} };
 
 ================================================================================
 TestDCEOfUsingDeclarations
@@ -614,8 +728,7 @@ TestDCETypeOfEqualsString
 ---------- /out.js ----------
 (() => {
   // entry.js
-  if (false)
-    console.log(hasBar);
+  if (false) console.log(hasBar);
 })();
 
 ================================================================================
@@ -768,25 +881,182 @@ function testStmts() {
   do
     var b;
   while (x);
-  for (var c; ; )
-    ;
-  for (var d in x)
-    ;
-  for (var e of x)
-    ;
+  for (var c; ; ) ;
+  for (var d in x) ;
+  for (var e of x) ;
   if (x)
     var f;
-  if (!x)
-    var g;
-  var h;
-  x:
-    var i;
+  if (!x) var g;
+  var h, i;
 }
 testReturn();
 testThrow();
 testBreak();
 testContinue();
 testStmts();
+
+================================================================================
+TestDeadCodeInsideEmptyTry
+---------- /out.js ----------
+// a.js
+var require_a = __commonJS({
+  "a.js"() {
+  }
+});
+
+// b.js
+var require_b = __commonJS({
+  "b.js"() {
+  }
+});
+
+// d.js
+var require_d = __commonJS({
+  "d.js"() {
+  }
+});
+
+// entry.js
+try {
+  foo();
+} catch {
+  require_a();
+} finally {
+  require_b();
+}
+try {
+} catch {
+} finally {
+  require_d();
+}
+
+================================================================================
+TestDeadCodeInsideUnusedCases
+---------- /out.js ----------
+// a.js
+var require_a = __commonJS({
+  "a.js"() {
+  }
+});
+
+// b.js
+var require_b = __commonJS({
+  "b.js"() {
+  }
+});
+
+// entry.js
+switch (x) {
+  case 0:
+    _ = require_a();
+    break;
+  case 1:
+    _ = require_b();
+    break;
+}
+switch (1) {
+  case 0:
+    _ = null;
+    break;
+  case 1:
+    _ = require_a();
+    break;
+  case 1:
+    _ = null;
+    break;
+  case 2:
+    _ = null;
+    break;
+}
+switch (0) {
+  case 1:
+    _ = null;
+    break;
+  default:
+    _ = require_a();
+    break;
+}
+switch (1) {
+  case 1:
+    _ = require_a();
+    break;
+  default:
+    _ = null;
+    break;
+}
+switch (0) {
+  case 1:
+    _ = null;
+    break;
+  default:
+    _ = null;
+    break;
+  case 0:
+    _ = require_a();
+    break;
+}
+switch (1) {
+  case x:
+    _ = require_a();
+    break;
+  case 1:
+    _ = require_b();
+    break;
+  case x:
+    _ = null;
+    break;
+  default:
+    _ = null;
+    break;
+}
+for (const x2 of y)
+  switch (1) {
+    case 0:
+      _ = null;
+      continue;
+    case 1:
+      _ = require_a();
+      continue;
+    case 2:
+      _ = null;
+      continue;
+  }
+x = () => {
+  switch (1) {
+    case 0:
+      _ = null;
+      return;
+    case 1:
+      _ = require_a();
+      return;
+    case 2:
+      _ = null;
+      return;
+  }
+};
+switch ("b") {
+  case "a":
+    _ = null;
+  case "b":
+    _ = require_a();
+  case "c":
+    _ = require_b();
+    break;
+  case "d":
+    _ = null;
+}
+switch ("b") {
+  case "a":
+    _ = null;
+  case "b":
+  case "c":
+    _ = require_a();
+  case "d":
+    _ = require_b();
+    break;
+  case "e":
+    _ = null;
+}
 
 ================================================================================
 TestDisableTreeShaking
@@ -804,6 +1074,28 @@ function keepMe3() {
 var keepMe4 = keepMe3();
 var keepMe5 = pure();
 var keepMe6 = some.fn();
+
+================================================================================
+TestDropLabelTreeShakingBugIssue3311
+---------- /out.js ----------
+// entry.js
+var myFunc = () => {
+  console.log("keep");
+};
+var entry_default = myFunc;
+export {
+  entry_default as default
+};
+
+================================================================================
+TestDropLabels
+---------- /out.js ----------
+// entry.js
+keep_1: require("foo1");
+exports.bar = function() {
+  if (x) ;
+  if (y) keep_2: require("bar2");
+};
 
 ================================================================================
 TestFileLoaderRemoveUnused
@@ -845,8 +1137,7 @@ foo();
 console.log(foo());
 console.log((foo(), void 0));
 console.log((foo(), void 0));
-for (; void 0; )
-  ;
+for (; void 0; ) ;
 foo();
 foo();
 foo();
@@ -990,11 +1281,9 @@ export let shouldBeWrapped = [
 TestInlineFunctionCallForInitDecl
 ---------- /out/entry.js ----------
 // entry.js
-for (y = void 0; !1; )
-  ;
+for (y = void 0; !1; ) ;
 var y;
-for (z = 123; !1; )
-  ;
+for (z = 123; !1; ) ;
 var z;
 
 ================================================================================
@@ -2348,6 +2637,19 @@ TestPureCallsWithSpread
 [...args];
 
 ================================================================================
+TestRemoveCodeAfterLabelWithReturn
+---------- /out.js ----------
+function earlyReturn() {
+  onlyWithKeep();
+}
+function loop() {
+  if (foo()) {
+    bar();
+    return;
+  }
+}
+
+================================================================================
 TestRemoveTrailingReturn
 ---------- /out.js ----------
 // entry.js
@@ -2400,6 +2702,17 @@ eval("foo(a, b, c)");
 TestRemoveUnusedImportsEvalTS
 ---------- /out.js ----------
 eval("foo(a, b, c)");
+
+================================================================================
+TestRemoveUnusedNoSideEffectsTaggedTemplates
+---------- /out.js ----------
+// entry.js
+// @__NO_SIDE_EFFECTS__
+function foo() {
+}
+use(foo`keep`);
+keep, alsoKeep;
+`${keep}${alsoKeep}`;
 
 ================================================================================
 TestRemoveUnusedPureCommentCalls
@@ -2645,14 +2958,14 @@ menu {
 TestTreeShakingJSWithAssociatedCSSExportStarSideEffectsFalse
 ---------- /out/test.js ----------
 // project/node_modules/pkg/button.css
-var require_ = __commonJS({
+var require_button = __commonJS({
   "project/node_modules/pkg/button.css"(exports, module) {
     module.exports = {};
   }
 });
 
 // project/node_modules/pkg/components.jsx
-require_();
+require_button();
 var Button = () => /* @__PURE__ */ React.createElement("button", null);
 
 // project/test.jsx
@@ -2668,14 +2981,14 @@ button {
 TestTreeShakingJSWithAssociatedCSSExportStarSideEffectsFalseOnlyJS
 ---------- /out/test.js ----------
 // project/node_modules/pkg/button.css
-var require_ = __commonJS({
+var require_button = __commonJS({
   "project/node_modules/pkg/button.css"(exports, module) {
     module.exports = {};
   }
 });
 
 // project/node_modules/pkg/components.jsx
-require_();
+require_button();
 var Button = () => /* @__PURE__ */ React.createElement("button", null);
 
 // project/test.jsx
@@ -2691,14 +3004,14 @@ button {
 TestTreeShakingJSWithAssociatedCSSReExportSideEffectsFalse
 ---------- /out/test.js ----------
 // project/node_modules/pkg/button.css
-var require_ = __commonJS({
+var require_button = __commonJS({
   "project/node_modules/pkg/button.css"(exports, module) {
     module.exports = {};
   }
 });
 
 // project/node_modules/pkg/components.jsx
-require_();
+require_button();
 var Button = () => /* @__PURE__ */ React.createElement("button", null);
 
 // project/test.jsx
@@ -2714,14 +3027,14 @@ button {
 TestTreeShakingJSWithAssociatedCSSReExportSideEffectsFalseOnlyJS
 ---------- /out/test.js ----------
 // project/node_modules/pkg/button.css
-var require_ = __commonJS({
+var require_button = __commonJS({
   "project/node_modules/pkg/button.css"(exports, module) {
     module.exports = {};
   }
 });
 
 // project/node_modules/pkg/components.jsx
-require_();
+require_button();
 var Button = () => /* @__PURE__ */ React.createElement("button", null);
 
 // project/test.jsx
