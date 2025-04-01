@@ -14,3 +14,4 @@ default:
 	git add .
 	git commit -m "Upgrade esbuild to $(VERSION)"
 	git tag $(VERSION)
+	git push --tags origin main
